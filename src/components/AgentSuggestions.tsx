@@ -1,9 +1,10 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Lightbulb, ArrowRight, Clock } from 'lucide-react';
+import { Lightbulb, ArrowRight, Clock, Filter } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 interface Suggestion {
   id: string;
@@ -42,6 +43,15 @@ const suggestions: Suggestion[] = [
     category: 'privacy',
     priority: 'medium',
     timeEstimate: '30 min'
+  },
+  {
+    id: '4',
+    title: 'Security Access Controls Review',
+    description: 'Your security policy needs updated access control procedures for SOC 2 compliance.',
+    type: 'review',
+    category: 'security',
+    priority: 'high',
+    timeEstimate: '45 min'
   }
 ];
 
@@ -72,6 +82,29 @@ const getPriorityIndicator = (priority: string) => {
 };
 
 const AgentSuggestions: React.FC = () => {
+  const [activeFilter, setActiveFilter] = useState<'all' | 'privacy' | 'hr' | 'security'>('all');
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const { toast } = useToast();
+  
+  const filteredSuggestions = activeFilter === 'all' 
+    ? suggestions 
+    : suggestions.filter(s => s.category === activeFilter);
+    
+  const handleAction = (id: string, title: string) => {
+    toast({
+      title: 'Action started',
+      description: `Working on: ${title}`,
+    });
+  };
+  
+  const toggleExpand = (id: string) => {
+    setExpanded(expanded === id ? null : id);
+  };
+  
+  const totalByCategory = (category: 'privacy' | 'hr' | 'security') => {
+    return suggestions.filter(s => s.category === category).length;
+  };
+
   return (
     <Card className="bg-white rounded-xl shadow-md card-shadow mb-6 animate-fade-in">
       <CardHeader className="px-6 py-4 border-b border-gray-200">
@@ -80,13 +113,55 @@ const AgentSuggestions: React.FC = () => {
             <Lightbulb className="mr-2 text-complimate-purple" size={18} />
             <CardTitle className="text-lg font-semibold text-gray-800">Agent Suggestions</CardTitle>
           </div>
-          <Button variant="ghost" className="text-xs">View All</Button>
+          <Button variant="ghost" size="sm" className="text-xs flex items-center gap-1">
+            <Filter size={12} />
+            Filter
+          </Button>
+        </div>
+        
+        <div className="flex gap-2 mt-3">
+          <Button 
+            variant={activeFilter === 'all' ? 'default' : 'outline'} 
+            size="sm" 
+            className="text-xs h-7"
+            onClick={() => setActiveFilter('all')}
+          >
+            All
+          </Button>
+          <Button 
+            variant={activeFilter === 'privacy' ? 'default' : 'outline'} 
+            size="sm" 
+            className="text-xs h-7"
+            onClick={() => setActiveFilter('privacy')}
+          >
+            Privacy ({totalByCategory('privacy')})
+          </Button>
+          <Button 
+            variant={activeFilter === 'hr' ? 'default' : 'outline'} 
+            size="sm" 
+            className="text-xs h-7"
+            onClick={() => setActiveFilter('hr')}
+          >
+            HR ({totalByCategory('hr')})
+          </Button>
+          <Button 
+            variant={activeFilter === 'security' ? 'default' : 'outline'} 
+            size="sm" 
+            className="text-xs h-7"
+            onClick={() => setActiveFilter('security')}
+          >
+            Security ({totalByCategory('security')})
+          </Button>
         </div>
       </CardHeader>
       <CardContent className="p-0">
         <div className="divide-y divide-gray-100">
-          {suggestions.map((suggestion) => (
-            <div key={suggestion.id} className="p-4 hover:bg-complimate-soft-gray transition-colors">
+          {filteredSuggestions.map((suggestion) => (
+            <div 
+              key={suggestion.id} 
+              className="p-4 hover:bg-complimate-soft-gray transition-colors cursor-pointer"
+              onClick={() => toggleExpand(suggestion.id)}
+            >
               <div className="flex items-start justify-between mb-2">
                 <div className="flex items-center">
                   {getPriorityIndicator(suggestion.priority)}
@@ -100,12 +175,46 @@ const AgentSuggestions: React.FC = () => {
                   <Clock size={12} className="mr-1" />
                   <span>{suggestion.timeEstimate}</span>
                 </div>
-                <Button variant="ghost" size="sm" className="text-complimate-purple hover:text-complimate-purple/80 p-0 h-auto">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="text-complimate-purple hover:text-complimate-purple/80 p-0 h-auto"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleAction(suggestion.id, suggestion.title);
+                  }}
+                >
                   Take Action <ArrowRight size={12} className="ml-1" />
                 </Button>
               </div>
+              
+              {expanded === suggestion.id && (
+                <div className="mt-4 pt-3 border-t border-gray-100 animate-fade-in">
+                  <h4 className="text-sm font-medium mb-2">Recommended Actions:</h4>
+                  <ul className="text-sm text-gray-600 space-y-1 ml-4">
+                    <li>• Review current documentation</li>
+                    <li>• Generate updated policy section</li>
+                    <li>• Get stakeholder approval</li>
+                    <li>• Implement changes by next quarter</li>
+                  </ul>
+                  <div className="mt-3 flex justify-end gap-2">
+                    <Button variant="outline" size="sm" className="text-xs h-7">
+                      Save for Later
+                    </Button>
+                    <Button size="sm" className="text-xs h-7">
+                      Start Now
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
+          
+          {filteredSuggestions.length === 0 && (
+            <div className="p-8 text-center">
+              <p className="text-gray-500">No suggestions found in this category</p>
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>

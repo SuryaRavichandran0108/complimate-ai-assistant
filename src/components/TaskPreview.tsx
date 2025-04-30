@@ -1,8 +1,9 @@
 
-import React from 'react';
-import { Clock, Calendar, Check, List, ArrowRight, Plus } from 'lucide-react';
+import React, { useState } from 'react';
+import { Clock, Calendar, Check, List, ArrowRight, Plus, Filter } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
 interface Task {
   id: string;
@@ -49,6 +50,12 @@ const tasks: Task[] = [
 ];
 
 const TaskPreview: React.FC = () => {
+  const [filter, setFilter] = useState<'all' | 'privacy' | 'hr' | 'security'>('all');
+  
+  const filteredTasks = filter === 'all' 
+    ? tasks 
+    : tasks.filter(task => task.category === filter);
+
   const getIcon = (iconName: string) => {
     switch (iconName) {
       case 'calendar':
@@ -90,6 +97,10 @@ const TaskPreview: React.FC = () => {
     }
   };
 
+  const getCategoryCount = (category: 'privacy' | 'hr' | 'security') => {
+    return tasks.filter(task => task.category === category).length;
+  };
+
   return (
     <div className="bg-white rounded-xl shadow-md card-shadow mt-6 p-6 animate-fade-in">
       <div className="flex justify-between items-center mb-4">
@@ -99,11 +110,43 @@ const TaskPreview: React.FC = () => {
         </Button>
       </div>
       
+      <div className="mb-4">
+        <Tabs defaultValue="all" value={filter} onValueChange={(value) => setFilter(value as any)}>
+          <TabsList className="grid grid-cols-4 w-full">
+            <TabsTrigger value="all">All</TabsTrigger>
+            <TabsTrigger value="privacy" className="relative">
+              Privacy
+              {getCategoryCount('privacy') > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-purple-500 rounded-full text-[10px] text-white flex items-center justify-center">
+                  {getCategoryCount('privacy')}
+                </span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="hr" className="relative">
+              HR
+              {getCategoryCount('hr') > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-orange-500 rounded-full text-[10px] text-white flex items-center justify-center">
+                  {getCategoryCount('hr')}
+                </span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="security" className="relative">
+              Security
+              {getCategoryCount('security') > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 rounded-full text-[10px] text-white flex items-center justify-center">
+                  {getCategoryCount('security')}
+                </span>
+              )}
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+      
       <div className="space-y-4">
-        {tasks.map((task) => (
+        {filteredTasks.map((task) => (
           <div 
             key={task.id} 
-            className="flex items-center p-3 hover:bg-complimate-soft-gray rounded-lg transition-colors duration-200 relative"
+            className="flex items-center p-3 hover:bg-complimate-soft-gray rounded-lg transition-colors duration-200 relative group"
           >
             {getCategoryIndicator(task.category)}
             <div className="flex-shrink-0 mr-4 pl-2">
@@ -113,16 +156,19 @@ const TaskPreview: React.FC = () => {
               <h3 className="text-sm font-medium text-gray-800 truncate">{task.title}</h3>
               <p className="text-xs text-gray-500">{task.dueDate}</p>
             </div>
-            <div className="ml-4">
+            <div className="ml-4 flex items-center gap-2">
               {getStatusBadge(task.status)}
+              <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100 transition-opacity p-1 h-auto">
+                <ArrowRight size={14} className="text-gray-500" />
+              </Button>
             </div>
           </div>
         ))}
       </div>
 
       <div className="mt-6 pt-4 border-t border-gray-100">
-        <Button variant="outline" className="w-full text-sm">
-          <Plus size={14} className="mr-1" /> 
+        <Button variant="outline" className="w-full text-sm flex items-center justify-center gap-1 hover:bg-complimate-soft-gray">
+          <Plus size={14} /> 
           Add Task
         </Button>
       </div>

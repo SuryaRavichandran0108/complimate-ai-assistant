@@ -131,4 +131,67 @@
   .sidebar-active {
     @apply bg-sidebar-accent text-sidebar-accent-foreground;
   }
+  
+  /* Chat interface animations */
+  @keyframes progress {
+    0% { width: 0%; }
+    50% { width: 70%; }
+    100% { width: 100%; }
+  }
+  
+  /* Pulse animation for notifications */
+  .pulse-dot {
+    position: relative;
+  }
+  
+  .pulse-dot::after {
+    content: '';
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: 50%;
+    background-color: currentColor;
+    opacity: 0.7;
+    animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  
+  @keyframes pulse {
+    0%, 100% {
+      transform: scale(1);
+      opacity: 0.7;
+    }
+    50% {
+      transform: scale(1.5);
+      opacity: 0;
+    }
+  }
+  
+  /* Fade animations */
+  .animate-fade-in {
+    animation: fadeIn 0.5s ease-out forwards;
+  }
+  
+  @keyframes fadeIn {
+    0% {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  /* Hover effects for cards */
+  .hover-card {
+    @apply transition-all duration-300;
+  }
+  
+  .hover-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  }
 }
