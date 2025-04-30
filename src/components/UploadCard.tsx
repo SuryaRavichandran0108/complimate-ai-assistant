@@ -2,7 +2,11 @@
 import React, { useState } from 'react';
 import { Upload } from 'lucide-react';
 
-const UploadCard: React.FC = () => {
+interface UploadCardProps {
+  onFileUpload?: (file: File | null) => void;
+}
+
+const UploadCard: React.FC<UploadCardProps> = ({ onFileUpload }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [file, setFile] = useState<File | null>(null);
 
@@ -38,6 +42,7 @@ const UploadCard: React.FC = () => {
       if (fileType === 'application/pdf' || 
           fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
         setFile(droppedFile);
+        if (onFileUpload) onFileUpload(droppedFile);
       } else {
         alert('Please upload a PDF or DOCX file');
       }
@@ -52,6 +57,7 @@ const UploadCard: React.FC = () => {
       if (fileType === 'application/pdf' || 
           fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
         setFile(selectedFile);
+        if (onFileUpload) onFileUpload(selectedFile);
       } else {
         alert('Please upload a PDF or DOCX file');
         e.target.value = '';
@@ -59,8 +65,18 @@ const UploadCard: React.FC = () => {
     }
   };
 
+  const handleAnalyze = () => {
+    // This function would eventually trigger document analysis
+    console.log('Analyzing document:', file);
+  };
+
+  const handleRemoveFile = () => {
+    setFile(null);
+    if (onFileUpload) onFileUpload(null);
+  };
+
   return (
-    <div className="bg-white rounded-xl shadow-md card-shadow p-6 md:p-8 mt-4 animate-fade-in">
+    <div className="bg-white rounded-xl shadow-md card-shadow p-6 md:p-8 animate-fade-in">
       <h2 className="text-xl font-semibold text-gray-800 mb-4">Upload Document for Review</h2>
       <div 
         className={`border-2 border-dashed rounded-lg p-8 text-center ${
@@ -80,7 +96,7 @@ const UploadCard: React.FC = () => {
               <p className="text-sm font-medium text-gray-900">{file.name}</p>
               <p className="text-xs text-gray-500">{Math.round(file.size / 1024)} KB</p>
               <button 
-                onClick={() => setFile(null)}
+                onClick={handleRemoveFile}
                 className="text-sm text-complimate-purple hover:text-complimate-purple/80 font-medium"
               >
                 Upload a different file
@@ -112,6 +128,7 @@ const UploadCard: React.FC = () => {
         <div className="mt-6 flex justify-end">
           <button 
             className="bg-complimate-purple hover:bg-complimate-purple/90 text-white py-2 px-6 rounded-md text-sm font-medium transition-colors duration-200"
+            onClick={handleAnalyze}
           >
             Analyze Document
           </button>
