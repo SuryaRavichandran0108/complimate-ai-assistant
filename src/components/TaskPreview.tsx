@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Clock, Calendar, Check, List, ArrowRight } from 'lucide-react';
+import { Clock, Calendar, Check, List, ArrowRight, Plus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
