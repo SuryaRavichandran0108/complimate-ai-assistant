@@ -13,7 +13,7 @@ const Index: React.FC = () => {
   return (
     <Layout>
       <div className="max-w-6xl mx-auto">
-        <div className="mb-8">
+        <div className="mb-6">
           <div className="flex items-center mb-2">
             <Shield className="mr-3 text-complimate-purple" size={28} />
             <h1 className="text-3xl font-bold text-foreground">Welcome to CompliMate</h1>
@@ -21,9 +21,9 @@ const Index: React.FC = () => {
           <p className="text-lg text-muted-foreground">Hi there 👋 — Ready to check your compliance?</p>
         </div>
         
-        <Card className="tech-card mb-8 bg-complimate-tech-dark border-complimate-dark-purple/40 overflow-hidden">
+        <Card className="tech-card mb-6 bg-complimate-tech-dark border-complimate-dark-purple/40 overflow-hidden">
           <div className="absolute inset-0 tech-gradient opacity-30"></div>
-          <CardContent className="p-8 relative">
+          <CardContent className="p-6 relative">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
               <div>
                 <h2 className="text-xl font-semibold text-complimate-purple mb-1">AI Compliance Assistant</h2>
