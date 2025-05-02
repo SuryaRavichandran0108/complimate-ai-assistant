@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -223,7 +222,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
             placeholder="Ask about compliance, regulations, or best practices..."
             value={input}
             onChange={handleInputChange}
-            disabled={isLoading || !user}
             className="flex-1"
           />
           <Button

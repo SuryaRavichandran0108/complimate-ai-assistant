@@ -113,32 +113,38 @@ serve(async (req) => {
     // Generate the response using LLM (mocked for now)
     const aiResponse = await generateComplianceResponse(query, documentContent);
 
-    // Save the chat history
-    const { data: chatData, error: chatError } = await supabaseClient
-      .from('chats')
-      .insert({
-        user_id,
-        document_id: document_id || null,
-        query,
-        response: aiResponse.rawResponse,
-      })
-      .select()
-      .single();
+    // Save the chat history if authenticated
+    let chatId = null;
+    try {
+      const { data: chatData, error: chatError } = await supabaseClient
+        .from('chats')
+        .insert({
+          user_id,
+          document_id: document_id || null,
+          query,
+          response: aiResponse.rawResponse,
+        })
+        .select()
+        .single();
 
-    if (chatError) {
-      console.error('Error saving chat:', chatError);
+      if (!chatError) {
+        chatId = chatData?.id;
+      }
+    } catch (error) {
+      console.error('Error saving chat:', error);
+      // Continue even if chat saving fails
     }
 
     return new Response(
       JSON.stringify({
-        id: chatData?.id,
+        id: chatId,
         query,
         response: aiResponse.rawResponse,
         compliantSections: aiResponse.compliantSections,
         gaps: aiResponse.gaps,
         suggestions: aiResponse.suggestions,
         document_id: document_id || null,
-        created_at: chatData?.created_at,
+        created_at: new Date().toISOString(),
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
