@@ -1,7 +1,7 @@
 
 import React from 'react';
 import Header from './Header';
-import { AppSidebar } from './AppSidebar';
+import AppSidebar from './AppSidebar';
 import { SidebarProvider, SidebarInset } from './ui/sidebar';
 
 interface LayoutProps {

@@ -1,10 +1,9 @@
-
 import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Brain, MessageSquare, History, Document } from 'lucide-react';
+import { Brain, MessageSquare, History, FileText } from 'lucide-react';
 import ChatInterface from '../components/ChatInterface';
 import { useAuth } from '@/contexts/AuthContext';
 import { getUserDocuments } from '@/utils/documentUtils';
@@ -101,7 +100,7 @@ const AskAgent: React.FC = () => {
                               onClick={() => handleDocumentSelect(doc)}
                             >
                               <div className="flex items-center gap-2">
-                                <Document size={14} className="shrink-0" />
+                                <FileText size={14} className="shrink-0" />
                                 <span className="truncate">{doc.name}</span>
                               </div>
                             </Button>
