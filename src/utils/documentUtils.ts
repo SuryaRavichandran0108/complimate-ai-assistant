@@ -29,9 +29,56 @@ export const uploadDocument = async (file: File, userId: string) => {
     
     if (insertError) throw insertError;
     
+    // Trigger document processing
+    if (data) {
+      processDocument(data.id, userId);
+    }
+    
     return { success: true, document: data };
   } catch (error) {
     console.error('Error uploading document:', error);
+    return { success: false, error };
+  }
+};
+
+export const processDocument = async (documentId: string, userId: string) => {
+  try {
+    // Call the process-document edge function
+    const { data: processResult, error: processError } = await supabase.functions
+      .invoke('process-document', {
+        body: { 
+          document_id: documentId,
+          user_id: userId
+        }
+      });
+    
+    if (processError) {
+      console.error('Error processing document:', processError);
+      return { success: false, error: processError };
+    }
+    
+    // Generate embeddings for the document chunks
+    const { data: embedResult, error: embedError } = await supabase.functions
+      .invoke('generate-embeddings', {
+        body: { 
+          document_id: documentId,
+          user_id: userId,
+          limit: 20 // Process up to 20 chunks at a time
+        }
+      });
+    
+    if (embedError) {
+      console.error('Error generating embeddings:', embedError);
+      // Still return success since document processing worked
+    }
+    
+    return { 
+      success: true, 
+      processed: processResult?.success,
+      embedded: embedResult?.processed || 0
+    };
+  } catch (error) {
+    console.error('Error in document processing workflow:', error);
     return { success: false, error };
   }
 };
@@ -89,5 +136,53 @@ export const deleteDocument = async (documentId: string, storagePath: string) =>
   } catch (error) {
     console.error('Error deleting document:', error);
     return { success: false, error };
+  }
+};
+
+export const getDocumentChunks = async (documentId: string) => {
+  try {
+    const { data, error } = await supabase
+      .from('document_chunks')
+      .select('*')
+      .eq('document_id', documentId)
+      .order('chunk_index', { ascending: true });
+    
+    if (error) throw error;
+    
+    return data;
+  } catch (error) {
+    console.error('Error fetching document chunks:', error);
+    return [];
+  }
+};
+
+export const getDocumentProcessingStatus = async (documentId: string) => {
+  try {
+    // Get total chunks
+    const { count: totalCount, error: countError } = await supabase
+      .from('document_chunks')
+      .select('*', { count: 'exact', head: true })
+      .eq('document_id', documentId);
+      
+    if (countError) throw countError;
+    
+    // Get embedded chunks
+    const { count: embeddedCount, error: embeddedError } = await supabase
+      .from('document_chunks')
+      .select('*', { count: 'exact', head: true })
+      .eq('document_id', documentId)
+      .not('embedding_vector', 'is', null);
+      
+    if (embeddedError) throw embeddedError;
+    
+    return {
+      total: totalCount || 0,
+      embedded: embeddedCount || 0,
+      isComplete: totalCount > 0 && embeddedCount === totalCount,
+      progress: totalCount ? Math.round((embeddedCount / totalCount) * 100) : 0
+    };
+  } catch (error) {
+    console.error('Error getting document processing status:', error);
+    return { total: 0, embedded: 0, isComplete: false, progress: 0 };
   }
 };

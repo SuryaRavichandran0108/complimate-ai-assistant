@@ -3,11 +3,17 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Send, Loader } from 'lucide-react';
+import { Send, Loader, ChevronDown, ChevronUp, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { askAgent } from '@/utils/chatService';
 import { saveTaskFromSuggestion } from '@/utils/chatService';
+
+interface DocumentContext {
+  chunk_text: string;
+  document_name: string;
+  similarity: number;
+}
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -16,6 +22,7 @@ interface ChatMessage {
   compliantSections?: string[];
   gaps?: string[];
   suggestions?: string[];
+  documentContext?: DocumentContext[];
 }
 
 interface ChatInterfaceProps {
@@ -32,6 +39,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [expandedContext, setExpandedContext] = useState<string | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -66,6 +74,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         compliantSections: response.compliantSections,
         gaps: response.gaps,
         suggestions: response.suggestions,
+        documentContext: response.documentContext,
       };
       
       setMessages((prev) => [...prev, assistantMessage]);
@@ -137,6 +146,14 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     }
   };
 
+  const toggleContext = (id: string) => {
+    if (expandedContext === id) {
+      setExpandedContext(null);
+    } else {
+      setExpandedContext(id);
+    }
+  };
+
   return (
     <Card className="border-complimate-dark-purple/30">
       <CardHeader className="pb-3">
@@ -195,6 +212,47 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                         </Button>
                       ))}
                     </div>
+                  </div>
+                )}
+                
+                {message.role === 'assistant' && message.documentContext && message.documentContext.length > 0 && (
+                  <div className="mt-3 ml-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs flex items-center gap-1 h-6"
+                      onClick={() => toggleContext(message.id || index.toString())}
+                    >
+                      <span>View Document Context</span>
+                      {expandedContext === (message.id || index.toString()) ? 
+                        <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                    </Button>
+                    
+                    {expandedContext === (message.id || index.toString()) && (
+                      <div className="mt-2 space-y-2 ml-1">
+                        <p className="text-xs font-medium text-muted-foreground">
+                          Sources used to generate this response:
+                        </p>
+                        {message.documentContext.map((context, i) => (
+                          <div 
+                            key={i} 
+                            className="border border-border rounded-md p-2 bg-background/50 text-sm"
+                          >
+                            <div className="flex items-center gap-2 mb-1">
+                              <FileText size={14} className="text-complimate-purple" />
+                              <span className="font-medium text-xs">
+                                {context.document_name}
+                              </span>
+                            </div>
+                            <p className="text-xs text-muted-foreground overflow-hidden text-ellipsis">
+                              {context.chunk_text.length > 150 
+                                ? `${context.chunk_text.substring(0, 150)}...` 
+                                : context.chunk_text}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

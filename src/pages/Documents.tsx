@@ -11,6 +11,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { getUserDocuments, deleteDocument, getDocumentUrl } from '@/utils/documentUtils';
 import DocumentUpload from '@/components/DocumentUpload';
 import { useToast } from '@/hooks/use-toast';
+import DocumentProcessingStatus from '@/components/DocumentProcessingStatus';
 
 const Documents: React.FC = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -93,6 +94,7 @@ const Documents: React.FC = () => {
               <p className="text-xs text-muted-foreground">
                 {document.type.includes('pdf') ? 'PDF' : 'DOCX'} • {Math.round(document.size / 1024)} KB
               </p>
+              <DocumentProcessingStatus documentId={document.id} onComplete={loadDocuments} />
             </div>
           </div>
           <Button 
@@ -133,6 +135,7 @@ const Documents: React.FC = () => {
           <div className="text-xs text-muted-foreground">
             {document.type.includes('pdf') ? 'PDF' : 'DOCX'} • {Math.round(document.size / 1024)} KB
           </div>
+          <DocumentProcessingStatus documentId={document.id} onComplete={loadDocuments} />
         </div>
       </div>
       
@@ -190,7 +193,7 @@ const Documents: React.FC = () => {
                 <CardTitle>Upload New Document</CardTitle>
               </CardHeader>
               <CardContent>
-                <DocumentUpload />
+                <DocumentUpload onUploadComplete={loadDocuments} />
               </CardContent>
             </Card>
             

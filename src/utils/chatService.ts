@@ -1,6 +1,12 @@
 
 import { supabase } from '@/integrations/supabase/client';
 
+export interface DocumentContext {
+  chunk_text: string;
+  document_name: string;
+  similarity: number;
+}
+
 export interface ChatResponse {
   id: string;
   query: string;
@@ -10,6 +16,7 @@ export interface ChatResponse {
   suggestions: string[];
   document_id: string | null;
   created_at: string;
+  documentContext?: DocumentContext[];
 }
 
 export interface ChatHistoryItem {
@@ -94,6 +101,60 @@ export const saveTaskFromSuggestion = async (
     return { success: true, task: data };
   } catch (error) {
     console.error('Error saving task:', error);
+    return { success: false, error };
+  }
+};
+
+// Add these utility functions to check document processing status 
+
+export const checkDocumentProcessingStatus = async (documentId: string) => {
+  try {
+    const { data: chunks, error } = await supabase
+      .from('document_chunks')
+      .select('id, embedding_vector')
+      .eq('document_id', documentId);
+      
+    if (error) throw error;
+    
+    const total = chunks?.length || 0;
+    const embedded = chunks?.filter(c => c.embedding_vector).length || 0;
+    
+    return {
+      total,
+      embedded,
+      progress: total > 0 ? Math.round((embedded / total) * 100) : 0,
+      isComplete: total > 0 && embedded === total
+    };
+  } catch (error) {
+    console.error('Error checking document processing status:', error);
+    return { total: 0, embedded: 0, progress: 0, isComplete: false };
+  }
+};
+
+export const triggerEmbeddingGeneration = async (documentId: string) => {
+  try {
+    // We need a user ID for security verification
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData?.user) {
+      throw new Error('User must be authenticated');
+    }
+    
+    const { data, error } = await supabase.functions.invoke('generate-embeddings', {
+      body: { 
+        document_id: documentId,
+        user_id: userData.user.id
+      },
+    });
+    
+    if (error) throw error;
+    
+    return { 
+      success: true,
+      processed: data.processed || 0,
+      total: data.total || 0
+    };
+  } catch (error) {
+    console.error('Error triggering embedding generation:', error);
     return { success: false, error };
   }
 };

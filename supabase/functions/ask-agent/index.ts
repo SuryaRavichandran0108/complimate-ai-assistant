@@ -1,4 +1,3 @@
-
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.43.0';
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 
@@ -14,16 +13,133 @@ interface RequestBody {
   user_id: string;
 }
 
-const generateComplianceResponse = async (query: string, documentContent = '') => {
+interface DocumentChunk {
+  id: string;
+  document_id: string;
+  chunk_text: string;
+  document_name: string;
+  similarity: number;
+}
+
+async function generateEmbedding(text: string): Promise<number[] | null> {
+  try {
+    const openaiKey = Deno.env.get('OPENAI_API_KEY');
+    if (!openaiKey) {
+      throw new Error('OpenAI API key not found');
+    }
+    
+    const response = await fetch('https://api.openai.com/v1/embeddings', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openaiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        input: text,
+        model: 'text-embedding-ada-002'
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`OpenAI API request failed: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    return data.data[0].embedding;
+  } catch (error) {
+    console.error('Error generating embedding:', error);
+    return null;
+  }
+}
+
+async function searchSimilarChunks(
+  supabaseClient: any, 
+  queryEmbedding: number[], 
+  userId: string,
+  documentId?: string,
+  threshold = 0.7,
+  limit = 5
+): Promise<DocumentChunk[]> {
+  try {
+    // If document_id is provided, only search within that document
+    // Otherwise, search across all user's documents
+    let matchFunctionParams: any = {
+      query_embedding: queryEmbedding,
+      match_threshold: threshold,
+      match_count: limit,
+      user_id: userId
+    };
+    
+    // Use Postgres function for similarity search
+    // This requires the match_document_chunks function to be created
+    const { data, error } = await supabaseClient.rpc(
+      'match_document_chunks', 
+      matchFunctionParams
+    );
+    
+    if (error) {
+      console.error('Error searching similar chunks:', error);
+      
+      // If we don't have the vector search function or pgvector, fallback to simpler approach
+      // In a real implementation, you would implement a JavaScript-based similarity search here
+      
+      // For now, just return chunks from the specified document or recent chunks
+      const { data: fallbackData, error: fallbackError } = await supabaseClient
+        .from('document_chunks')
+        .select(`
+          id, 
+          document_id, 
+          chunk_text,
+          documents!inner(name)
+        `)
+        .eq('documents.user_id', userId)
+        .limit(limit)
+        .order('created_at', { ascending: false });
+        
+      if (fallbackError) {
+        console.error('Fallback search failed:', fallbackError);
+        return [];
+      }
+      
+      // Format the fallback results to match expected structure
+      return (fallbackData || []).map((chunk: any) => ({
+        id: chunk.id,
+        document_id: chunk.document_id,
+        chunk_text: chunk.chunk_text,
+        document_name: chunk.documents.name,
+        similarity: 0 // Not a real similarity score
+      }));
+    }
+    
+    return data || [];
+  } catch (error) {
+    console.error('Error in chunk similarity search:', error);
+    return [];
+  }
+}
+
+const generateComplianceResponse = async (
+  query: string, 
+  documentChunks: DocumentChunk[] = []
+) => {
   console.log("🚀 Starting generateComplianceResponse with query:", query);
-  console.log("📄 Document content length:", documentContent.length);
+  console.log("📄 Document chunks:", documentChunks.length);
+  
+  // Prepare context from document chunks
+  let documentContext = '';
+  if (documentChunks.length > 0) {
+    documentContext = `
+You are analyzing the following document excerpts:
+
+${documentChunks.map((chunk, i) => `[EXCERPT ${i+1} from ${chunk.document_name}]
+${chunk.chunk_text}
+`).join('\n\n')}
+
+Based on these excerpts, `;
+  }
   
   const prompt = `
-You are a compliance advisor for small U.S. businesses. A user uploaded this document:
-
-"""${documentContent}"""
-
-They asked this question:
+${documentContext}You are a compliance advisor for small U.S. businesses. ${documentChunks.length > 0 ? 'Use the provided excerpts to ' : ''}Answer this question:
 "${query}"
 
 Respond with 3 structured sections:
@@ -32,6 +148,7 @@ Respond with 3 structured sections:
 💡 Recommended Improvements:
 
 Use plain language. Reference relevant U.S. laws or common best practices if possible.
+${documentChunks.length > 0 ? 'Make specific references to the document content when applicable.' : ''}
 `
 
   const openaiKey = Deno.env.get('OPENAI_API_KEY')
@@ -70,7 +187,12 @@ Use plain language. Reference relevant U.S. laws or common best practices if pos
           rawResponse: `The agent couldn't generate a response. API returned: ${raw.substring(0, 200)}...`,
           compliantSections: [],
           gaps: [],
-          suggestions: []
+          suggestions: [],
+          documentChunks: documentChunks.map(dc => ({
+            chunk_text: dc.chunk_text,
+            document_name: dc.document_name,
+            similarity: dc.similarity
+          }))
         };
       }
       
@@ -78,7 +200,12 @@ Use plain language. Reference relevant U.S. laws or common best practices if pos
         rawResponse: answer,
         compliantSections: [],  // You can optionally parse these later
         gaps: [],
-        suggestions: []
+        suggestions: [],
+        documentChunks: documentChunks.map(dc => ({
+          chunk_text: dc.chunk_text,
+          document_name: dc.document_name,
+          similarity: dc.similarity
+        }))
       };
     } catch (err) {
       console.error("❌ Failed to parse OpenAI response:", err);
@@ -86,7 +213,8 @@ Use plain language. Reference relevant U.S. laws or common best practices if pos
         rawResponse: `The agent couldn't parse the AI response. Raw output: ${raw.substring(0, 200)}...`,
         compliantSections: [],
         gaps: [],
-        suggestions: []
+        suggestions: [],
+        documentChunks: []
       };
     }
   } catch (err) {
@@ -95,7 +223,8 @@ Use plain language. Reference relevant U.S. laws or common best practices if pos
       rawResponse: `The agent couldn't generate a response due to an error: ${err.message}`,
       compliantSections: [],
       gaps: [],
-      suggestions: []
+      suggestions: [],
+      documentChunks: []
     }
   }
 }
@@ -130,32 +259,27 @@ serve(async (req) => {
       );
     }
 
-    // If document_id is provided, get the document content
-    let documentContent = '';
-    if (document_id) {
-      // Fetch document metadata
-      const { data: docData, error: docError } = await supabaseClient
-        .from('documents')
-        .select('*')
-        .eq('id', document_id)
-        .single();
-
-      if (docError || !docData) {
-        console.error("❌ Error fetching document:", docError);
-        return new Response(
-          JSON.stringify({ error: 'Document not found' }),
-          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      console.log("📃 Found document:", docData.name);
-      // In a real implementation, you would extract text from the document here
-      documentContent = `Sample text extracted from ${docData.name}`;
+    // Generate embedding for the query for similarity search
+    let documentChunks: DocumentChunk[] = [];
+    const queryEmbedding = await generateEmbedding(query);
+    
+    if (queryEmbedding) {
+      // Search for similar document chunks
+      documentChunks = await searchSimilarChunks(
+        supabaseClient, 
+        queryEmbedding, 
+        user_id, 
+        document_id
+      );
+      
+      console.log(`📚 Found ${documentChunks.length} relevant document chunks`);
+    } else {
+      console.warn("⚠️ Could not generate embedding for query");
     }
 
     // Generate the response using LLM
     console.log("🤖 Generating AI response...");
-    const aiResponse = await generateComplianceResponse(query, documentContent);
+    const aiResponse = await generateComplianceResponse(query, documentChunks);
     console.log("✅ AI response generated, length:", aiResponse.rawResponse.length);
 
     // Save the chat history if authenticated
@@ -193,6 +317,7 @@ serve(async (req) => {
         suggestions: aiResponse.suggestions,
         document_id: document_id || null,
         created_at: new Date().toISOString(),
+        documentContext: aiResponse.documentChunks
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
