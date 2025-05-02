@@ -67,20 +67,20 @@ const Index: React.FC = () => {
 
   return (
     <Layout>
-      <div className="max-w-7xl mx-auto">
-        <div className="mb-6">
-          <div className="flex items-center mb-2">
+      <div className="max-w-7xl mx-auto pointer-events-auto">
+        <div className="mb-6 pointer-events-auto">
+          <div className="flex items-center mb-2 pointer-events-auto">
             <Shield className="mr-3 text-complimate-purple" size={28} />
             <h1 className="text-3xl font-bold text-foreground">CompliMate</h1>
           </div>
           <p className="text-lg text-muted-foreground">Your AI Compliance Officer — 24/7, Affordable, and Always Up to Date</p>
         </div>
         
-        <Card className="tech-card mb-6 bg-complimate-tech-dark border-complimate-dark-purple/40 overflow-hidden">
+        <Card className="tech-card mb-6 bg-complimate-tech-dark border-complimate-dark-purple/40 overflow-hidden pointer-events-auto">
           <div className="absolute inset-0 tech-gradient opacity-30"></div>
-          <CardContent className="p-6 relative">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-              <div className="max-w-2xl">
+          <CardContent className="p-6 relative pointer-events-auto">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pointer-events-auto">
+              <div className="max-w-2xl pointer-events-auto">
                 <h2 className="text-xl font-semibold text-complimate-purple mb-1">
                   Upload your policy. Ask a question. Get smart compliance support in seconds.
                 </h2>
@@ -88,13 +88,13 @@ const Index: React.FC = () => {
                   Our AI reviews every document against SOC 2, GDPR, HIPAA, and state-specific labor laws to identify gaps and provide actionable recommendations.
                 </p>
               </div>
-              <div className="flex gap-3">
+              <div className="flex gap-3 pointer-events-auto">
                 {!user ? (
-                  <Button onClick={() => navigate('/auth')} className="flex items-center gap-2">
+                  <Button onClick={() => navigate('/auth')} className="flex items-center gap-2 pointer-events-auto">
                     <LogIn size={16} /> Sign In
                   </Button>
                 ) : (
-                  <Button onClick={() => navigate('/documents')}>Manage Documents</Button>
+                  <Button onClick={() => navigate('/documents')} className="pointer-events-auto">Manage Documents</Button>
                 )}
               </div>
             </div>
@@ -102,8 +102,8 @@ const Index: React.FC = () => {
         </Card>
         
         {activeDocument && (
-          <Card className="mb-6 animate-fade-in">
-            <CardContent className="p-4 flex items-center justify-between">
+          <Card className="mb-6 animate-fade-in pointer-events-auto">
+            <CardContent className="p-4 flex items-center justify-between pointer-events-auto">
               <div className="flex items-center">
                 <div className="w-10 h-10 rounded-full bg-complimate-soft-gray flex items-center justify-center mr-3">
                   <FileText className="h-5 w-5 text-complimate-purple" />
@@ -134,8 +134,8 @@ const Index: React.FC = () => {
           </Card>
         )}
         
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pointer-events-auto">
+          <div className="lg:col-span-2 pointer-events-auto">
             {!activeDocument && !loading && (
               <>
                 {user ? (
@@ -178,8 +178,8 @@ const Index: React.FC = () => {
                       </CardContent>
                     </Card>
                   ) : (
-                    <Tabs defaultValue="upload" className="mb-6">
-                      <TabsList>
+                    <Tabs defaultValue="upload" className="mb-6 pointer-events-auto">
+                      <TabsList className="pointer-events-auto">
                         <TabsTrigger value="upload">Upload Document</TabsTrigger>
                         <TabsTrigger value="policy">Create Policy</TabsTrigger>
                         <TabsTrigger value="check">Quick Check</TabsTrigger>
@@ -255,8 +255,8 @@ const Index: React.FC = () => {
                     </Tabs>
                   )
                 ) : (
-                  <Tabs defaultValue="upload" className="mb-6">
-                    <TabsList>
+                  <Tabs defaultValue="upload" className="mb-6 pointer-events-auto">
+                    <TabsList className="pointer-events-auto">
                       <TabsTrigger value="upload">Upload Document</TabsTrigger>
                       <TabsTrigger value="policy">Create Policy</TabsTrigger>
                       <TabsTrigger value="check">Quick Check</TabsTrigger>
@@ -342,7 +342,7 @@ const Index: React.FC = () => {
               />
             </div>
           </div>
-          <div className="lg:col-span-1">
+          <div className="lg:col-span-1 pointer-events-auto">
             <AgentSuggestions />
             <TaskPreview />
           </div>
