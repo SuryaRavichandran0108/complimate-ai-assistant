@@ -140,20 +140,20 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   };
 
   return (
-    <Card className="border-complimate-dark-purple/30 pointer-events-auto">
-      <CardHeader className="pb-3 pointer-events-auto">
-        <CardTitle className="text-lg flex items-center gap-2 pointer-events-auto">
+    <Card className="border-complimate-dark-purple/30">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg flex items-center gap-2">
           <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></div>
           {documentContext === 'document' && activeDocument
             ? `Chat about ${activeDocument.name}`
             : 'CompliMate Assistant'}
         </CardTitle>
       </CardHeader>
-      <CardContent className="pointer-events-auto">
-        <div className="flex flex-col space-y-4 mb-4 pointer-events-auto">
+      <CardContent>
+        <div className="flex flex-col space-y-4 mb-4">
           {messages.length === 0 ? (
-            <div className="text-center py-12 pointer-events-auto">
-              <p className="text-muted-foreground text-sm pointer-events-auto">
+            <div className="text-center py-12">
+              <p className="text-muted-foreground text-sm">
                 How can I help with your compliance questions today?
               </p>
             </div>
@@ -161,12 +161,12 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
             messages.map((message, index) => (
               <div
                 key={index}
-                className={`flex flex-col pointer-events-auto ${
+                className={`flex flex-col ${
                   message.role === 'assistant' ? 'items-start' : 'items-end'
                 }`}
               >
                 <div
-                  className={`rounded-lg px-4 py-2 max-w-[85%] pointer-events-auto ${
+                  className={`rounded-lg px-4 py-2 max-w-[85%] ${
                     message.role === 'assistant'
                       ? 'bg-secondary text-secondary-foreground'
                       : 'bg-complimate-purple text-white'
@@ -181,19 +181,19 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 </div>
                 
                 {message.role === 'assistant' && message.suggestions && message.suggestions.length > 0 && (
-                  <div className="mt-3 ml-2 space-y-2 pointer-events-auto">
-                    <p className="text-xs font-medium text-muted-foreground pointer-events-auto">Suggested Tasks:</p>
-                    <div className="flex flex-wrap gap-2 pointer-events-auto">
+                  <div className="mt-3 ml-2 space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground">Suggested Tasks:</p>
+                    <div className="flex flex-wrap gap-2">
                       {message.suggestions.map((suggestion, i) => (
                         <Button
                           key={i}
                           size="sm"
                           variant="outline"
-                          className="py-1 h-auto text-xs flex items-center gap-1 pointer-events-auto"
+                          className="py-1 h-auto text-xs flex items-center gap-1"
                           onClick={() => handleSaveTask(suggestion)}
                         >
-                          <span className="block truncate max-w-[200px] pointer-events-auto">{suggestion}</span>
-                          <span className="text-complimate-purple pointer-events-auto">+</span>
+                          <span className="block truncate max-w-[200px]">{suggestion}</span>
+                          <span className="text-complimate-purple">+</span>
                         </Button>
                       ))}
                     </div>
@@ -204,7 +204,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
           )}
           
           {isLoading && (
-            <div className="flex items-center justify-center py-2 pointer-events-auto">
+            <div className="flex items-center justify-center py-2">
               <Loader className="animate-spin h-5 w-5 text-complimate-purple" />
               <span className="ml-2 text-sm text-muted-foreground">Processing...</span>
             </div>
@@ -212,24 +212,23 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         </div>
 
         {!user && (
-          <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-md flex items-center gap-2 pointer-events-auto">
+          <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-md flex items-center gap-2">
             <AlertTriangle className="text-yellow-500" size={18} />
-            <p className="text-sm text-foreground pointer-events-auto">Please sign in to use the chat feature.</p>
+            <p className="text-sm text-foreground">Please sign in to use the chat feature.</p>
           </div>
         )}
         
-        <form onSubmit={handleSubmit} className="flex items-center space-x-2 pointer-events-auto">
+        <form onSubmit={handleSubmit} className="flex items-center space-x-2">
           <Input
             placeholder="Ask about compliance, regulations, or best practices..."
             value={input}
             onChange={handleInputChange}
-            className="flex-1 pointer-events-auto"
+            className="flex-1"
           />
           <Button
             type="submit"
             size="icon"
             disabled={!input.trim() || isLoading || !user}
-            className="pointer-events-auto"
           >
             <Send className="h-4 w-4" />
           </Button>

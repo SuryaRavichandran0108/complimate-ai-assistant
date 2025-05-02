@@ -11,11 +11,11 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   return (
     <SidebarProvider defaultOpen={true}>
-      <div className="flex min-h-screen w-full bg-background pointer-events-auto">
+      <div className="flex min-h-screen w-full bg-background">
         <AppSidebar />
-        <SidebarInset className="relative flex flex-col flex-1 pointer-events-auto">
+        <SidebarInset className="relative flex flex-col flex-1">
           <Header />
-          <main className="flex-1 p-4 sm:p-6 md:p-8 overflow-y-auto pointer-events-auto">{children}</main>
+          <main className="flex-1 p-4 sm:p-6 md:p-8 overflow-y-auto">{children}</main>
         </SidebarInset>
       </div>
     </SidebarProvider>

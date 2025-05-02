@@ -10,7 +10,7 @@ interface UploadCardProps {
 
 const UploadCard: React.FC<UploadCardProps> = ({ onFileUpload }) => {
   return (
-    <Card className="pointer-events-auto">
+    <Card>
       <CardContent className="p-6">
         <div className="border-2 border-dashed rounded-lg p-8 text-center">
           <div className="flex flex-col items-center justify-center space-y-4">
@@ -25,10 +25,10 @@ const UploadCard: React.FC<UploadCardProps> = ({ onFileUpload }) => {
                 PDF or DOCX up to 10MB
               </p>
             </div>
-            <div className="mt-2 pointer-events-auto">
+            <div className="mt-2">
               <Button
                 onClick={onFileUpload}
-                className="bg-complimate-purple hover:bg-complimate-purple/90 text-white pointer-events-auto"
+                className="bg-complimate-purple hover:bg-complimate-purple/90 text-white cursor-pointer"
               >
                 Sign in to upload
               </Button>
