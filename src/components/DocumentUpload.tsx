@@ -1,20 +1,30 @@
 
 import React, { useState } from 'react';
-import { Upload, X, FileText, AlertCircle } from 'lucide-react';
+import { Upload, X, FileText, AlertTriangle, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useAuth } from '@/contexts/AuthContext';
 import { uploadDocument } from '@/utils/documentUtils';
 import { useToast } from '@/hooks/use-toast';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Progress } from '@/components/ui/progress';
 
 interface DocumentUploadProps {
-  onUploadComplete?: () => void;
+  onUploadComplete?: (documentId: string) => void;
 }
 
 const DocumentUpload: React.FC<DocumentUploadProps> = ({ onUploadComplete }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [file, setFile] = useState<File | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [uploadState, setUploadState] = useState<{
+    isUploading: boolean;
+    progress: number;
+    error: string | null;
+  }>({
+    isUploading: false,
+    progress: 0,
+    error: null
+  });
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -65,7 +75,12 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({ onUploadComplete }) => 
       
       if (fileSize <= 10 * 1024 * 1024) { // 10MB max
         setFile(file);
+        setUploadState(prev => ({ ...prev, error: null }));
       } else {
+        setUploadState(prev => ({ 
+          ...prev, 
+          error: "File too large. Please upload a file smaller than 10MB."
+        }));
         toast({
           title: "File too large",
           description: "Please upload a file smaller than 10MB",
@@ -73,6 +88,10 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({ onUploadComplete }) => 
         });
       }
     } else {
+      setUploadState(prev => ({ 
+        ...prev, 
+        error: "Invalid file type. Please upload a PDF, DOCX, or TXT file."
+      }));
       toast({
         title: "Invalid file type",
         description: "Please upload a PDF, DOCX, or TXT file",
@@ -83,45 +102,104 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({ onUploadComplete }) => 
 
   const handleRemoveFile = () => {
     setFile(null);
+    setUploadState({
+      isUploading: false,
+      progress: 0,
+      error: null
+    });
+  };
+
+  const simulateProgress = () => {
+    // Simulate upload progress
+    let progress = 0;
+    const interval = setInterval(() => {
+      progress += Math.random() * 10;
+      if (progress > 95) {
+        progress = 95; // Max out at 95% until actual completion
+        clearInterval(interval);
+      }
+      setUploadState(prev => ({ ...prev, progress: Math.min(95, progress) }));
+    }, 300);
+    
+    return () => clearInterval(interval);
   };
 
   const handleUpload = async () => {
     if (!file || !user) return;
     
-    setLoading(true);
-    const result = await uploadDocument(file, user.id);
+    setUploadState({
+      isUploading: true,
+      progress: 0,
+      error: null
+    });
     
-    if (result.success) {
-      toast({
-        title: "Document uploaded",
-        description: "Your document has been uploaded successfully and is being processed.",
-      });
-      setFile(null);
+    // Start progress simulation
+    const stopProgress = simulateProgress();
+    
+    try {
+      const result = await uploadDocument(file, user.id);
       
-      if (onUploadComplete) {
-        onUploadComplete();
+      // Stop progress simulation
+      stopProgress();
+      
+      if (result.success) {
+        setUploadState(prev => ({
+          ...prev,
+          isUploading: false,
+          progress: 100
+        }));
+        
+        toast({
+          title: "✅ Document successfully uploaded",
+          description: "Processing in background...",
+        });
+        
+        setFile(null);
+        
+        if (onUploadComplete && result.document) {
+          onUploadComplete(result.document.id);
+        }
+      } else {
+        throw new Error(result.error || 'Upload failed');
       }
-    } else {
+    } catch (error) {
+      console.error('Error uploading document:', error);
+      stopProgress();
+      
+      setUploadState(prev => ({
+        ...prev,
+        isUploading: false,
+        progress: 0,
+        error: "Upload failed. Please try again."
+      }));
+      
       toast({
         title: "Upload failed",
-        description: "There was an error uploading your document",
+        description: "There was an error uploading your document. Please try again.",
         variant: "destructive",
       });
     }
-    
-    setLoading(false);
   };
 
   return (
     <div 
-      className={`border-2 border-dashed rounded-lg p-8 text-center ${
+      className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors duration-200 ${
         isDragging ? 'border-complimate-purple bg-complimate-soft-gray' : 'border-gray-300'
-      } transition-colors duration-200`}
+      }`}
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
+      {uploadState.error && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            {uploadState.error}
+          </AlertDescription>
+        </Alert>
+      )}
+      
       <div className="flex flex-col items-center justify-center space-y-4">
         {!file ? (
           <>
@@ -144,6 +222,19 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({ onUploadComplete }) => 
             </div>
             <p className="text-xs text-gray-500">or drag and drop</p>
           </>
+        ) : uploadState.isUploading ? (
+          <>
+            <div className="p-3 bg-complimate-soft-gray rounded-full animate-pulse">
+              <Upload className="h-6 w-6 text-complimate-purple" />
+            </div>
+            <p className="text-sm font-medium text-gray-900">Uploading {file.name}</p>
+            <div className="w-full max-w-xs">
+              <Progress value={uploadState.progress} className="h-2" />
+              <p className="mt-1 text-xs text-muted-foreground text-right">
+                {Math.round(uploadState.progress)}%
+              </p>
+            </div>
+          </>
         ) : (
           <>
             <div className="p-3 bg-complimate-soft-gray rounded-full">
@@ -163,10 +254,10 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({ onUploadComplete }) => 
               <Button 
                 size="sm" 
                 onClick={handleUpload} 
-                disabled={loading} 
+                disabled={uploadState.isUploading} 
                 className="flex items-center gap-1"
               >
-                <Upload size={14} /> {loading ? 'Uploading...' : 'Upload'}
+                <Upload size={14} /> Upload
               </Button>
             </div>
           </>
@@ -175,7 +266,7 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({ onUploadComplete }) => 
       
       {!user && (
         <div className="mt-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-md flex items-center gap-2">
-          <AlertCircle className="text-yellow-500" size={18} />
+          <AlertTriangle className="text-yellow-500" size={18} />
           <p className="text-sm text-foreground">Please sign in to upload documents.</p>
         </div>
       )}

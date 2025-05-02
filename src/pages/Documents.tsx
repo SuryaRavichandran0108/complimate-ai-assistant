@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Layout from '../components/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,44 +12,64 @@ import { getUserDocuments, deleteDocument, getDocumentUrl } from '@/utils/docume
 import DocumentUpload from '@/components/DocumentUpload';
 import { useToast } from '@/hooks/use-toast';
 import DocumentProcessingStatus from '@/components/DocumentProcessingStatus';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const Documents: React.FC = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [documents, setDocuments] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const { user } = useAuth();
   const { toast } = useToast();
   
-  useEffect(() => {
-    if (user) {
-      loadDocuments();
-    } else {
+  const loadDocuments = useCallback(async () => {
+    if (!user) {
       setDocuments([]);
       setIsLoading(false);
+      return;
     }
-  }, [user]);
-  
-  const loadDocuments = async () => {
-    if (!user) return;
     
     setIsLoading(true);
-    const docs = await getUserDocuments(user.id);
-    setDocuments(docs || []);
-    setIsLoading(false);
-  };
+    try {
+      const docs = await getUserDocuments(user.id);
+      setDocuments(docs || []);
+    } catch (error) {
+      console.error('Error loading documents:', error);
+      toast({
+        title: "Failed to load documents",
+        description: "There was an error loading your documents.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user, toast]);
+  
+  useEffect(() => {
+    loadDocuments();
+  }, [loadDocuments, refreshTrigger]);
   
   const handleDeleteDocument = async (documentId: string, storagePath: string) => {
     if (!user) return;
     
-    const result = await deleteDocument(documentId, storagePath);
-    
-    if (result.success) {
-      setDocuments(documents.filter(doc => doc.id !== documentId));
-      toast({
-        title: "Document deleted",
-        description: "The document has been successfully deleted.",
-      });
-    } else {
+    try {
+      const result = await deleteDocument(documentId, storagePath);
+      
+      if (result.success) {
+        // Update UI optimistically
+        setDocuments(documents.filter(doc => doc.id !== documentId));
+        
+        toast({
+          title: "Document deleted",
+          description: "The document has been successfully deleted.",
+        });
+      } else {
+        throw new Error(result.error || 'Delete failed');
+      }
+    } catch (error) {
+      console.error('Error deleting document:', error);
+      
       toast({
         title: "Delete failed",
         description: "There was an error deleting the document.",
@@ -59,17 +79,36 @@ const Documents: React.FC = () => {
   };
   
   const handleOpenDocument = async (storagePath: string) => {
-    const url = await getDocumentUrl(storagePath);
-    
-    if (url) {
-      window.open(url, '_blank');
-    } else {
+    try {
+      const url = await getDocumentUrl(storagePath);
+      
+      if (url) {
+        window.open(url, '_blank');
+      } else {
+        throw new Error('Could not get document URL');
+      }
+    } catch (error) {
+      console.error('Error opening document:', error);
+      
       toast({
         title: "Error",
         description: "Could not open the document.",
         variant: "destructive",
       });
     }
+  };
+  
+  const handleUploadComplete = (documentId: string) => {
+    // Refresh the document list after a short delay
+    // This gives time for the backend to process the document
+    setTimeout(() => {
+      setRefreshTrigger(prev => prev + 1);
+    }, 500);
+  };
+  
+  const handleProcessingComplete = () => {
+    // Refresh the document list when processing is complete
+    setRefreshTrigger(prev => prev + 1);
   };
   
   const getFileIcon = (type: string) => {
@@ -83,6 +122,12 @@ const Documents: React.FC = () => {
     }
   };
   
+  const filteredDocuments = searchQuery 
+    ? documents.filter(doc => 
+        doc.name.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : documents;
+  
   const DocumentCard = ({ document }) => (
     <Card className="tech-card hover:border-complimate-purple/30 transition-all">
       <CardContent className="p-4">
@@ -92,9 +137,13 @@ const Documents: React.FC = () => {
             <div>
               <h3 className="font-medium text-foreground">{document.name}</h3>
               <p className="text-xs text-muted-foreground">
-                {document.type.includes('pdf') ? 'PDF' : 'DOCX'} • {Math.round(document.size / 1024)} KB
+                {document.type.includes('pdf') ? 'PDF' : 
+                 document.type.includes('word') ? 'DOCX' : 'TXT'} • {Math.round(document.size / 1024)} KB
               </p>
-              <DocumentProcessingStatus documentId={document.id} onComplete={loadDocuments} />
+              <DocumentProcessingStatus 
+                documentId={document.id} 
+                onComplete={handleProcessingComplete} 
+              />
             </div>
           </div>
           <Button 
@@ -133,9 +182,13 @@ const Documents: React.FC = () => {
         <div>
           <h3 className="font-medium text-foreground">{document.name}</h3>
           <div className="text-xs text-muted-foreground">
-            {document.type.includes('pdf') ? 'PDF' : 'DOCX'} • {Math.round(document.size / 1024)} KB
+            {document.type.includes('pdf') ? 'PDF' : 
+             document.type.includes('word') ? 'DOCX' : 'TXT'} • {Math.round(document.size / 1024)} KB
           </div>
-          <DocumentProcessingStatus documentId={document.id} onComplete={loadDocuments} />
+          <DocumentProcessingStatus 
+            documentId={document.id}
+            onComplete={handleProcessingComplete}
+          />
         </div>
       </div>
       
@@ -193,7 +246,7 @@ const Documents: React.FC = () => {
                 <CardTitle>Upload New Document</CardTitle>
               </CardHeader>
               <CardContent>
-                <DocumentUpload onUploadComplete={loadDocuments} />
+                <DocumentUpload onUploadComplete={handleUploadComplete} />
               </CardContent>
             </Card>
             
@@ -207,8 +260,18 @@ const Documents: React.FC = () => {
                         type="search"
                         placeholder="Search documents..."
                         className="pl-10"
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
                       />
                     </div>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setRefreshTrigger(prev => prev + 1)}
+                      className="ml-2"
+                    >
+                      <RefreshCw size={16} className="mr-1" /> Refresh
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -219,11 +282,11 @@ const Documents: React.FC = () => {
                 <p>Loading documents...</p>
               </div>
             ) : (
-              documents.length > 0 ? (
+              filteredDocuments.length > 0 ? (
                 <>
                   {viewMode === 'grid' ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {documents.map(doc => (
+                      {filteredDocuments.map(doc => (
                         <DocumentCard key={doc.id} document={doc} />
                       ))}
                     </div>
@@ -237,7 +300,7 @@ const Documents: React.FC = () => {
                           <div className="w-36"></div>
                         </div>
                       </div>
-                      {documents.map(doc => (
+                      {filteredDocuments.map(doc => (
                         <DocumentRow key={doc.id} document={doc} />
                       ))}
                     </div>
