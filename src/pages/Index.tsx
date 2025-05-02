@@ -69,6 +69,7 @@ const Index: React.FC = () => {
   return (
     <Layout>
       <div className="max-w-7xl mx-auto">
+        {/* Header and tagline */}
         <div className="mb-6">
           <div className="flex items-center mb-2">
             <Shield className="mr-3 text-complimate-purple" size={28} />
@@ -77,6 +78,7 @@ const Index: React.FC = () => {
           <p className="text-lg text-muted-foreground">Your AI Compliance Officer — 24/7, Affordable, and Always Up to Date</p>
         </div>
         
+        {/* Main CTA section */}
         <Card className="tech-card mb-6 bg-complimate-tech-dark border-complimate-dark-purple/40 overflow-hidden">
           <div className="absolute inset-0 tech-gradient opacity-30"></div>
           <CardContent className="p-6 relative">
@@ -108,6 +110,7 @@ const Index: React.FC = () => {
           </CardContent>
         </Card>
         
+        {/* Document analysis card - only shows when a document is selected */}
         {activeDocument && (
           <Card className="mb-6 animate-fade-in">
             <CardContent className="p-4 flex items-center justify-between">
@@ -142,6 +145,7 @@ const Index: React.FC = () => {
         )}
         
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Main content area */}
           <div className="lg:col-span-2">
             {!activeDocument && !loading && (
               <>
@@ -213,6 +217,7 @@ const Index: React.FC = () => {
               </>
             )}
             
+            {/* Quick Links section */}
             <Card className="mb-6">
               <CardContent className="p-6">
                 <h3 className="text-lg font-medium mb-3">Quick Links</h3>
@@ -268,6 +273,8 @@ const Index: React.FC = () => {
               </CardContent>
             </Card>
           </div>
+          
+          {/* Sidebar with agent suggestions and task preview */}
           <div className="lg:col-span-1">
             <AgentSuggestions />
             <TaskPreview />
