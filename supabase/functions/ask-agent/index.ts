@@ -14,53 +14,52 @@ interface RequestBody {
   user_id: string;
 }
 
-const generateComplianceResponse = async (query: string, documentContent?: string) => {
-  // Mock LLM response for now (you would replace this with an actual OpenAI or Claude call)
-  let responseContent = '';
-  let compliantSections = [];
-  let gaps = [];
-  let suggestions = [];
+const generateComplianceResponse = async (query: string, documentContent = '') => {
+  const prompt = `
+You are a compliance advisor for small U.S. businesses. A user uploaded this document:
 
-  // Different responses based on query type
-  if (query.toLowerCase().includes('gdpr')) {
-    compliantSections = ['Data subject rights section', 'Lawful processing basis'];
-    gaps = ['Missing data retention policy', 'No defined DPO role'];
-    suggestions = ['Add clear retention schedules', 'Designate a Data Protection Officer'];
-  } else if (query.toLowerCase().includes('hipaa')) {
-    compliantSections = ['Patient consent procedures', 'Access controls'];
-    gaps = ['Missing breach notification process', 'Weak technical safeguards'];
-    suggestions = ['Add breach notification timeline', 'Implement stronger encryption'];
-  } else if (query.toLowerCase().includes('soc 2')) {
-    compliantSections = ['Security controls', 'Audit logging'];
-    gaps = ['Missing vendor assessment procedure', 'Insufficient disaster recovery'];
-    suggestions = ['Create vendor assessment program', 'Develop disaster recovery protocol'];
-  } else {
-    compliantSections = ['General compliance framework', 'Documentation structure'];
-    gaps = ['Needs more specificity in key areas', 'Missing implementation details'];
-    suggestions = ['Add concrete procedures', 'Include sample forms/templates'];
-  }
+"""${documentContent}"""
 
-  // Structure the response
-  responseContent = `
-## Analysis Results
+They asked this question:
+"${query}"
 
-### ✅ Compliant Sections
-${compliantSections.map(item => `- ${item}`).join('\n')}
+Respond with 3 structured sections:
+✅ Compliant Aspects:
+⚠️ Noncompliant or Risky Areas:
+💡 Recommended Improvements:
 
-### ⚠️ Identified Gaps / Risks
-${gaps.map(item => `- ${item}`).join('\n')}
+Use plain language. Reference relevant U.S. laws or common best practices if possible.
+`
 
-### 💡 Suggested Changes
-${suggestions.map(item => `- ${item}`).join('\n')}
-  `;
+  const openaiKey = Deno.env.get('OPENAI_API_KEY')
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${openaiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: 'gpt-4',
+      messages: [
+        { role: 'system', content: 'You are a helpful compliance assistant for SMBs.' },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.2
+    })
+  })
+
+  const data = await response.json()
+  const answer = data.choices?.[0]?.message?.content ?? "The agent couldn't generate a response."
 
   return {
-    rawResponse: responseContent,
-    compliantSections,
-    gaps,
-    suggestions
-  };
-};
+    rawResponse: answer,
+    compliantSections: [],  // You can optionally parse these from the LLM response later
+    gaps: [],
+    suggestions: []
+  }
+}
+
 
 serve(async (req) => {
   // Handle CORS preflight requests
