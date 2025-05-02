@@ -46,6 +46,19 @@ const Index: React.FC = () => {
     setActiveDocument(null);
   };
 
+  // Handle navigation with auth check
+  const handleNavigation = (path: string) => {
+    if (!user && path !== '/auth') {
+      navigate('/auth');
+      toast({
+        title: "Authentication Required",
+        description: "Please sign in to access this feature",
+      });
+    } else {
+      navigate(path);
+    }
+  };
+
   const complianceStats = [
     { label: 'Compliance Score', value: '72%', color: 'text-complimate-purple' },
     { label: 'Tasks Completed', value: '8/12', color: 'text-green-500' },
@@ -78,13 +91,13 @@ const Index: React.FC = () => {
               </div>
               <div className="flex gap-3 pointer-events-auto">
                 <Button 
-                  onClick={() => navigate('/documents')} 
+                  onClick={() => handleNavigation('/documents')} 
                   className="flex items-center gap-2 pointer-events-auto"
                 >
                   <FileText size={16} /> Upload Document
                 </Button>
                 <Button 
-                  onClick={() => navigate('/ask-agent')} 
+                  onClick={() => handleNavigation('/ask-agent')} 
                   variant="outline" 
                   className="flex items-center gap-2 pointer-events-auto"
                 >
@@ -163,7 +176,7 @@ const Index: React.FC = () => {
                             <Button 
                               variant="link" 
                               className="w-full" 
-                              onClick={() => navigate('/documents')}
+                              onClick={() => handleNavigation('/documents')}
                             >
                               View all documents ({documents.length})
                             </Button>
@@ -178,7 +191,7 @@ const Index: React.FC = () => {
                           <FileText size={36} className="mb-3 mx-auto text-muted-foreground" />
                           <h3 className="text-lg font-medium mb-2">No documents yet</h3>
                           <p className="text-muted-foreground mb-4">Upload your first document to get started</p>
-                          <Button onClick={() => navigate('/documents')} className="flex items-center gap-2">
+                          <Button onClick={() => handleNavigation('/documents')} className="flex items-center gap-2">
                             <FileText size={16} /> Upload Document
                           </Button>
                         </div>
@@ -207,7 +220,7 @@ const Index: React.FC = () => {
                   <Button 
                     variant="outline" 
                     className="justify-start h-auto py-2.5" 
-                    onClick={() => navigate('/ask-agent')}
+                    onClick={() => handleNavigation('/ask-agent')}
                   >
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded-full bg-complimate-soft-gray flex items-center justify-center">
@@ -223,7 +236,7 @@ const Index: React.FC = () => {
                   <Button 
                     variant="outline" 
                     className="justify-start h-auto py-2.5" 
-                    onClick={() => navigate('/documents')}
+                    onClick={() => handleNavigation('/documents')}
                   >
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded-full bg-complimate-soft-gray flex items-center justify-center">
@@ -239,7 +252,7 @@ const Index: React.FC = () => {
                   <Button 
                     variant="outline" 
                     className="justify-start h-auto py-2.5" 
-                    onClick={() => navigate('/tasks')}
+                    onClick={() => handleNavigation('/tasks')}
                   >
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded-full bg-complimate-soft-gray flex items-center justify-center">
