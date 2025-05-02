@@ -1,362 +1,241 @@
 
-import React, { useState, useRef, useEffect } from 'react';
-import { Check, FileText, ToggleLeft, ToggleRight, Send, AlertCircle, Lightbulb, DownloadCloud } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import React, { useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Send, Loader, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { askAgent } from '@/utils/chatService';
+import { saveTaskFromSuggestion } from '@/utils/chatService';
 
-interface Message {
-  id: string;
-  type: 'user' | 'assistant' | 'system';
+interface ChatMessage {
+  role: 'user' | 'assistant';
   content: string;
+  id?: string;
+  compliantSections?: string[];
+  gaps?: string[];
+  suggestions?: string[];
 }
 
 interface ChatInterfaceProps {
   documentContext: 'general' | 'document';
-  activeDocument: File | null;
+  activeDocument: any | null;
+  onChatComplete?: () => void;
 }
 
-const mockAssistantResponse = `
-**Document Analysis Complete**
-
-✅ **Compliance Strengths**
-- Privacy policy includes required CCPA disclosure sections
-- Clear data retention policy that meets industry standards
-- Well-structured consent mechanisms
-
-⚠️ **Gaps Identified**
-- Missing specific GDPR data subject access request procedures
-- California employee privacy notice requirements not fully addressed
-- Lacks updated references to Virginia's Consumer Data Protection Act
-
-💡 **Suggested Updates**
-1. Add a dedicated section for GDPR data subject rights with timeframes
-2. Include California-specific employee privacy disclosures
-3. Update third-party sharing disclosures to match latest regulations
-4. Incorporate reference to Virginia CDPA compliance measures
-
-Would you like me to help draft any of these missing sections?
-`;
-
-const mockDocumentResponseWithScore = `
-**Privacy Policy Analysis**
-
-📊 **Compliance Score: 72/100**
-
-✅ **Compliance Strengths**
-- Privacy policy includes required CCPA disclosure sections
-- Clear data retention policy that meets industry standards
-- Well-structured consent mechanisms
-
-⚠️ **Gaps Identified**
-- Missing specific GDPR data subject access request procedures
-- California employee privacy notice requirements not fully addressed
-- Lacks updated references to Virginia's Consumer Data Protection Act
-
-💡 **Suggested Updates**
-1. Add a dedicated section for GDPR data subject rights with timeframes
-2. Include California-specific employee privacy disclosures
-3. Update third-party sharing disclosures to match latest regulations
-4. Incorporate reference to Virginia CDPA compliance measures
-
-Would you like me to help draft any of these missing sections?
-`;
-
-const suggestedQuestions = [
-  "What's missing from my privacy policy?",
-  "How can I improve GDPR compliance?",
-  "Generate a CCPA-compliant cookie notice",
-  "Check if my policy meets SOC 2 requirements"
-];
-
-const ChatInterface: React.FC<ChatInterfaceProps> = ({ documentContext, activeDocument }) => {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [inputValue, setInputValue] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
-  const [isDocumentMode, setIsDocumentMode] = useState(documentContext === 'document');
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+const ChatInterface: React.FC<ChatInterfaceProps> = ({ 
+  documentContext, 
+  activeDocument,
+  onChatComplete
+}) => {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
 
-  useEffect(() => {
-    setIsDocumentMode(documentContext === 'document');
-  }, [documentContext]);
-
-  useEffect(() => {
-    if (activeDocument && messages.length === 0) {
-      setIsAnalyzing(true);
-      // Simulate document analysis
-      setTimeout(() => {
-        const systemMessage: Message = {
-          id: Date.now().toString(),
-          type: 'system',
-          content: `Analyzing document: ${activeDocument.name}`
-        };
-        setMessages([systemMessage]);
-        
-        // Simulate completion of analysis
-        setTimeout(() => {
-          const analysisMessage: Message = {
-            id: (Date.now() + 1).toString(),
-            type: 'assistant',
-            content: mockDocumentResponseWithScore
-          };
-          setMessages(prev => [...prev, analysisMessage]);
-          setIsAnalyzing(false);
-          
-          toast({
-            title: 'Document Analysis Complete',
-            description: 'View the compliance report for your document',
-          });
-        }, 3000);
-      }, 1000);
-    }
-  }, [activeDocument]);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInput(e.target.value);
   };
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (inputValue.trim()) {
-      // Add user message
-      const userMessage: Message = {
-        id: Date.now().toString(),
-        type: 'user',
-        content: inputValue
+    if (!input.trim() || isLoading) return;
+    
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "Please sign in to use the chat feature.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    const userMessage: ChatMessage = {
+      role: 'user',
+      content: input,
+    };
+    
+    setMessages((prev) => [...prev, userMessage]);
+    setInput('');
+    setIsLoading(true);
+    
+    try {
+      const response = await askAgent(
+        input, 
+        documentContext === 'document' && activeDocument ? activeDocument.id : undefined
+      );
+      
+      const assistantMessage: ChatMessage = {
+        role: 'assistant',
+        content: response.response,
+        id: response.id,
+        compliantSections: response.compliantSections,
+        gaps: response.gaps,
+        suggestions: response.suggestions,
       };
       
-      setMessages(prev => [...prev, userMessage]);
-      setInputValue('');
+      setMessages((prev) => [...prev, assistantMessage]);
       
-      // Simulate AI typing
-      setIsTyping(true);
+      if (onChatComplete) {
+        onChatComplete();
+      }
+    } catch (error: any) {
+      console.error('Error sending message:', error);
       
-      // Simulate response after delay
-      setTimeout(() => {
-        const assistantMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          type: 'assistant',
-          content: isDocumentMode ? mockDocumentResponseWithScore : mockAssistantResponse
-        };
-        
-        setMessages(prev => [...prev, assistantMessage]);
-        setIsTyping(false);
-      }, 2000);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit(e);
-    }
-  };
-
-  const toggleDocumentMode = () => {
-    setIsDocumentMode(!isDocumentMode);
-    
-    if (!isDocumentMode && !activeDocument) {
       toast({
-        title: 'No document selected',
-        description: 'Please upload a document first to enable document mode',
-        variant: 'destructive'
+        title: "Error",
+        description: error.message || "Failed to get a response from the agent.",
+        variant: "destructive",
+      });
+      
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: "I'm sorry, I couldn't process your request. Please try again later.",
+        },
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSaveTask = async (suggestion: string) => {
+    if (!user) return;
+    
+    try {
+      const result = await saveTaskFromSuggestion(
+        user.id,
+        activeDocument?.id || null,
+        suggestion
+      );
+      
+      if (result.success) {
+        toast({
+          title: "Task saved",
+          description: "The suggestion has been added to your tasks.",
+        });
+        
+        if (onChatComplete) {
+          onChatComplete();
+        }
+      } else {
+        toast({
+          title: "Failed to save task",
+          description: "There was an error saving the task.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Error saving task:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save the task.",
+        variant: "destructive",
       });
     }
   };
 
-  const useQuickPrompt = (prompt: string) => {
-    setInputValue(prompt);
-    // Focus the input field
-    document.getElementById('chatInput')?.focus();
-  };
-
-  const renderMessageContent = (content: string) => {
-    // This is a simple renderer for markdown-like content
-    return content.split('\n').map((line, i) => {
-      if (line.startsWith('📊')) {
-        return <p key={i} className="font-bold text-complimate-purple">{line}</p>;
-      } else if (line.startsWith('✅')) {
-        return <p key={i} className="font-medium text-green-600">{line}</p>;
-      } else if (line.startsWith('⚠️')) {
-        return <p key={i} className="font-medium text-amber-600">{line}</p>;
-      } else if (line.startsWith('💡')) {
-        return <p key={i} className="font-medium text-blue-600">{line}</p>;
-      } else if (line.startsWith('**') && line.endsWith('**')) {
-        return <p key={i} className="font-bold">{line.replace(/\*\*/g, '')}</p>;
-      } else if (line.startsWith('- ')) {
-        return <p key={i} className="ml-4">• {line.substring(2)}</p>;
-      } else if (line.match(/^\d+\./)) {
-        return <p key={i} className="ml-4">{line}</p>;
-      } else {
-        return <p key={i}>{line}</p>;
-      }
-    });
-  };
-
   return (
-    <div className="bg-white rounded-xl shadow-md card-shadow mt-6 flex flex-col h-[500px] animate-fade-in">
-      <div className="px-6 py-4 border-b border-gray-200">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-800">Compliance Assistant</h2>
-          <div 
-            className="flex items-center cursor-pointer group"
-            onClick={toggleDocumentMode}
-          >
-            {isDocumentMode ? (
-              <>
-                <FileText size={16} className="text-complimate-purple mr-2" />
-                <span className="text-sm font-medium mr-2">Document Mode</span>
-                <ToggleRight size={20} className="text-complimate-purple" />
-              </>
-            ) : (
-              <>
-                <span className="text-sm font-medium mr-2">General Mode</span>
-                <ToggleLeft size={20} className="text-gray-400 group-hover:text-complimate-purple/70" />
-              </>
-            )}
-          </div>
-        </div>
-        {isDocumentMode && activeDocument && (
-          <div className="mt-2 flex items-center">
-            <Badge variant="outline" className="text-xs gap-1 flex items-center">
-              <FileText size={10} /> 
-              {activeDocument.name}
-            </Badge>
-            <Button variant="ghost" size="sm" className="h-6 p-1 ml-2">
-              <DownloadCloud size={14} className="text-gray-500" />
-            </Button>
-          </div>
-        )}
-      </div>
-      
-      <div className="flex-1 p-6 overflow-y-auto space-y-4">
-        {/* Welcome message if no messages */}
-        {messages.length === 0 && !isAnalyzing && (
-          <div className="bg-complimate-soft-gray rounded-lg p-4 text-gray-700">
-            {isDocumentMode ? (
-              <p>I'm ready to analyze your document. Upload a file or ask specific questions about compliance requirements.</p>
-            ) : (
-              <p>Hi there 👋 — Ready to check your compliance? Upload a document or ask me a question about your compliance needs.</p>
-            )}
-          </div>
-        )}
-        
-        {/* Document analyzing state */}
-        {isAnalyzing && (
-          <div className="flex flex-col items-center justify-center h-full text-center">
-            <div className="animate-pulse mb-4">
-              <FileText size={40} className="text-complimate-purple" />
+    <Card className="border-complimate-dark-purple/30">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg flex items-center gap-2">
+          <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></div>
+          {documentContext === 'document' && activeDocument
+            ? `Chat about ${activeDocument.name}`
+            : 'CompliMate Assistant'}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="flex flex-col space-y-4 mb-4">
+          {messages.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground text-sm">
+                How can I help with your compliance questions today?
+              </p>
             </div>
-            <h3 className="text-lg font-medium mb-2">Analyzing Document</h3>
-            <p className="text-sm text-gray-500 mb-4">Please wait while we process your document...</p>
-            <div className="w-48 bg-gray-200 h-1 rounded-full overflow-hidden">
-              <div className="bg-complimate-purple h-full animate-[progress_3s_ease-in-out_infinite]" style={{width: '60%'}}></div>
-            </div>
-          </div>
-        )}
-        
-        {/* Chat messages */}
-        {messages.map((message) => (
-          <div 
-            key={message.id} 
-            className={`flex ${
-              message.type === 'user' 
-                ? 'justify-end' 
-                : message.type === 'system' 
-                  ? 'justify-center' 
-                  : 'justify-start'
-            }`}
-          >
-            {message.type === 'system' ? (
-              <div className="bg-complimate-soft-purple/20 text-complimate-purple rounded-lg px-4 py-2 text-sm flex items-center">
-                <AlertCircle size={16} className="mr-2" />
-                {message.content}
-              </div>
-            ) : (
-              <div 
-                className={`max-w-[80%] rounded-lg px-4 py-2 space-y-2 ${
-                  message.type === 'user' 
-                    ? 'bg-complimate-purple text-white' 
-                    : 'bg-complimate-soft-gray text-gray-800'
+          ) : (
+            messages.map((message, index) => (
+              <div
+                key={index}
+                className={`flex flex-col ${
+                  message.role === 'assistant' ? 'items-start' : 'items-end'
                 }`}
               >
-                {renderMessageContent(message.content)}
+                <div
+                  className={`rounded-lg px-4 py-2 max-w-[85%] ${
+                    message.role === 'assistant'
+                      ? 'bg-secondary text-secondary-foreground'
+                      : 'bg-complimate-purple text-white'
+                  }`}
+                >
+                  {message.content.split('\n').map((line, i) => (
+                    <React.Fragment key={i}>
+                      {line}
+                      {i < message.content.split('\n').length - 1 && <br />}
+                    </React.Fragment>
+                  ))}
+                </div>
+                
+                {message.role === 'assistant' && message.suggestions && message.suggestions.length > 0 && (
+                  <div className="mt-3 ml-2 space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground">Suggested Tasks:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {message.suggestions.map((suggestion, i) => (
+                        <Button
+                          key={i}
+                          size="sm"
+                          variant="outline"
+                          className="py-1 h-auto text-xs flex items-center gap-1"
+                          onClick={() => handleSaveTask(suggestion)}
+                        >
+                          <span className="block truncate max-w-[200px]">{suggestion}</span>
+                          <span className="text-complimate-purple">+</span>
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        ))}
-        
-        {/* Typing indicator */}
-        {isTyping && (
-          <div className="flex justify-start">
-            <div className="bg-complimate-soft-gray rounded-lg px-4 py-2">
-              <div className="flex items-center space-x-1">
-                <div className="w-2 h-2 rounded-full bg-gray-500 animate-pulse"></div>
-                <div className="w-2 h-2 rounded-full bg-gray-500 animate-pulse" style={{ animationDelay: '0.2s' }}></div>
-                <div className="w-2 h-2 rounded-full bg-gray-500 animate-pulse" style={{ animationDelay: '0.4s' }}></div>
-              </div>
+            ))
+          )}
+          
+          {isLoading && (
+            <div className="flex items-center justify-center py-2">
+              <Loader className="animate-spin h-5 w-5 text-complimate-purple" />
+              <span className="ml-2 text-sm text-muted-foreground">Processing...</span>
             </div>
+          )}
+        </div>
+
+        {!user && (
+          <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-md flex items-center gap-2">
+            <AlertTriangle className="text-yellow-500" size={18} />
+            <p className="text-sm text-foreground">Please sign in to use the chat feature.</p>
           </div>
         )}
         
-        {/* Suggested questions */}
-        {messages.length > 0 && messages.length < 3 && !isTyping && (
-          <div className="flex flex-wrap gap-2 mt-4">
-            <div className="w-full text-xs text-gray-500 flex items-center mb-1">
-              <Lightbulb size={12} className="mr-1 text-complimate-purple" />
-              Suggested questions:
-            </div>
-            {suggestedQuestions.map((question, index) => (
-              <Button 
-                key={index} 
-                variant="outline" 
-                size="sm" 
-                className="text-xs py-1 h-auto"
-                onClick={() => useQuickPrompt(question)}
-              >
-                {question}
-              </Button>
-            ))}
-          </div>
-        )}
-        
-        <div ref={messagesEndRef} />
-      </div>
-      
-      <div className="p-4 border-t border-gray-200">
-        <form onSubmit={handleSubmit} className="flex space-x-2">
-          <input
-            id="chatInput"
-            type="text"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={isDocumentMode ? "Ask about this document's compliance..." : "Ask about compliance requirements..."}
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-complimate-purple focus:border-transparent"
-            disabled={isAnalyzing}
+        <form onSubmit={handleSubmit} className="flex items-center space-x-2">
+          <Input
+            placeholder="Ask about compliance, regulations, or best practices..."
+            value={input}
+            onChange={handleInputChange}
+            disabled={isLoading || !user}
+            className="flex-1"
           />
           <Button
             type="submit"
-            disabled={!inputValue.trim() || isTyping || isAnalyzing}
-            className={`px-4 py-2 bg-complimate-purple text-white rounded-md flex items-center gap-2 ${
-              !inputValue.trim() || isTyping || isAnalyzing
-                ? 'opacity-50 cursor-not-allowed'
-                : 'hover:bg-complimate-purple/90'
-            } transition-colors duration-200`}
+            size="icon"
+            disabled={!input.trim() || isLoading || !user}
           >
-            <Send size={16} />
-            Send
+            <Send className="h-4 w-4" />
           </Button>
         </form>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 };
 

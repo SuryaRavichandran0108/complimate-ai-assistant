@@ -1,174 +1,191 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
-import { Code, Send, Bot } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Brain, MessageSquare, History, Document } from 'lucide-react';
+import ChatInterface from '../components/ChatInterface';
+import { useAuth } from '@/contexts/AuthContext';
+import { getUserDocuments } from '@/utils/documentUtils';
+import { getUserChatHistory } from '@/utils/chatService';
 
 const AskAgent: React.FC = () => {
-  const [messages, setMessages] = useState([
-    {
-      role: 'system',
-      content: 'Welcome to CompliMate Agent. I can help you with compliance questions and regulatory guidance.'
+  const [activeDocument, setActiveDocument] = useState<any | null>(null);
+  const [chatContext, setChatContext] = useState<'general' | 'document'>('general');
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [chatHistory, setChatHistory] = useState<any[]>([]);
+  const { user } = useAuth();
+  
+  useEffect(() => {
+    if (user) {
+      loadUserData();
     }
-  ]);
-  const [input, setInput] = useState('');
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (input.trim()) {
-      // Add user message
-      setMessages([...messages, { role: 'user', content: input }]);
-      
-      // Simulate AI response
-      setTimeout(() => {
-        let response;
-        if (input.toLowerCase().includes('gdpr') || input.toLowerCase().includes('ccpa')) {
-          response = `
-Based on your question about ${input.toLowerCase().includes('gdpr') ? 'GDPR' : 'CCPA'} compliance:
-
-✅ **Compliance Strengths:**
-- Your document has clear user consent mechanisms
-- Data retention policies are well-defined
-
-⚠️ **Gaps Identified:**
-- Missing specific language around user data deletion requests
-- Insufficient details on third-party data sharing
-
-💡 **Suggested Updates:**
-- Add a dedicated section on user rights to deletion
-- Define specific timeframes for responding to privacy requests
-- Include a comprehensive list of third parties with access to data
-
-Would you like me to help draft the missing sections?`;
-        } else {
-          response = "I'd be happy to analyze your compliance needs. Could you provide more specific information about your regulatory concerns or upload a document for me to review?";
-        }
-        
-        setMessages(prev => [...prev, { role: 'assistant', content: response }]);
-      }, 1000);
-      
-      // Clear input
-      setInput('');
-    }
+  }, [user]);
+  
+  const loadUserData = async () => {
+    if (!user) return;
+    
+    // Get user documents
+    const docs = await getUserDocuments(user.id);
+    setDocuments(docs || []);
+    
+    // Get chat history
+    const history = await getUserChatHistory(user.id);
+    setChatHistory(history || []);
+  };
+  
+  const handleDocumentSelect = (doc: any) => {
+    setActiveDocument(doc);
+    setChatContext('document');
+  };
+  
+  const clearActiveDocument = () => {
+    setActiveDocument(null);
+    setChatContext('general');
   };
 
   return (
     <Layout>
-      <div className="max-w-6xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground">CompliMate Agent</h1>
-          <p className="mt-2 text-lg text-muted-foreground">
-            Ask questions about regulations, compliance requirements, or document reviews
-          </p>
-        </div>
-        
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
-            <Card className="tech-card h-full flex flex-col">
+      <div className="max-w-7xl mx-auto">
+        <div className="flex flex-col md:flex-row gap-6">
+          <div className="md:w-1/3 lg:w-1/4 space-y-6">
+            <Card>
               <CardHeader>
-                <div className="flex items-center space-x-2">
-                  <Bot className="text-complimate-purple" />
-                  <CardTitle>AI Compliance Assistant</CardTitle>
-                </div>
+                <CardTitle className="flex items-center gap-2">
+                  <Brain className="text-complimate-purple" size={18} />
+                  Compliance AI
+                </CardTitle>
               </CardHeader>
-              
-              <CardContent className="flex-grow flex flex-col">
-                <Tabs defaultValue="chat" className="w-full">
-                  <TabsList className="grid w-full grid-cols-2 mb-6">
-                    <TabsTrigger value="chat">Chat</TabsTrigger>
-                    <TabsTrigger value="code">Code Analyzer</TabsTrigger>
+              <CardContent>
+                <Tabs defaultValue="context">
+                  <TabsList className="w-full grid grid-cols-2">
+                    <TabsTrigger value="context">Context</TabsTrigger>
+                    <TabsTrigger value="history">History</TabsTrigger>
                   </TabsList>
                   
-                  <TabsContent value="chat" className="flex-grow flex flex-col">
-                    <div className="flex-grow mb-4 space-y-4 overflow-y-auto max-h-[60vh]">
-                      {messages.map((msg, index) => (
-                        <div 
-                          key={index}
-                          className={`p-3 rounded-lg max-w-[85%] ${
-                            msg.role === 'user' 
-                              ? 'bg-secondary ml-auto text-secondary-foreground' 
-                              : 'bg-muted mr-auto'
-                          }`}
-                        >
-                          <div className="whitespace-pre-wrap">{msg.content}</div>
-                        </div>
-                      ))}
+                  <TabsContent value="context" className="mt-4 space-y-4">
+                    <div>
+                      <h3 className="text-sm font-medium mb-2">Current Context</h3>
+                      <div className="p-3 bg-muted rounded-lg flex items-center gap-2">
+                        <MessageSquare size={16} className="text-complimate-purple" />
+                        <span>
+                          {activeDocument 
+                            ? `Discussing ${activeDocument.name}` 
+                            : 'General compliance questions'
+                          }
+                        </span>
+                      </div>
                     </div>
                     
-                    <form onSubmit={handleSubmit} className="flex gap-2 mt-auto">
-                      <Input
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        placeholder="Ask about compliance requirements..."
-                        className="flex-grow"
-                      />
-                      <Button type="submit">
-                        <Send size={18} />
+                    {activeDocument && (
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={clearActiveDocument}
+                        className="w-full"
+                      >
+                        Clear Document Context
                       </Button>
-                    </form>
+                    )}
+                    
+                    {documents.length > 0 && !activeDocument && (
+                      <div>
+                        <h3 className="text-sm font-medium mb-2">Your Documents</h3>
+                        <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
+                          {documents.map(doc => (
+                            <Button
+                              key={doc.id}
+                              variant="ghost"
+                              className="w-full justify-start text-left p-2 h-auto"
+                              onClick={() => handleDocumentSelect(doc)}
+                            >
+                              <div className="flex items-center gap-2">
+                                <Document size={14} className="shrink-0" />
+                                <span className="truncate">{doc.name}</span>
+                              </div>
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </TabsContent>
                   
-                  <TabsContent value="code" className="space-y-4">
-                    <div className="rounded-md bg-secondary/30 p-4 border border-border">
-                      <div className="flex items-center mb-3">
-                        <Code className="text-complimate-purple mr-2" size={18} />
-                        <h3 className="font-medium">Code Compliance Analysis</h3>
-                      </div>
-                      <p className="text-muted-foreground text-sm">
-                        Upload or paste code snippets for security and compliance analysis.
-                      </p>
-                    </div>
-                    <div className="flex justify-center items-center border border-dashed border-border rounded-lg p-8">
-                      <p className="text-muted-foreground">
-                        Drag and drop code files or click to upload
-                      </p>
+                  <TabsContent value="history" className="mt-4">
+                    <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
+                      {chatHistory.length > 0 ? (
+                        chatHistory.map((chat) => (
+                          <div 
+                            key={chat.id} 
+                            className="p-2 hover:bg-muted rounded-md cursor-pointer"
+                          >
+                            <p className="text-sm font-medium truncate">{chat.query}</p>
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs text-muted-foreground">
+                                {new Date(chat.created_at).toLocaleDateString()}
+                              </span>
+                              {chat.document_id && (
+                                <span className="text-xs bg-secondary px-1.5 py-0.5 rounded-full">
+                                  Document
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-center text-sm text-muted-foreground py-4">
+                          No chat history yet
+                        </p>
+                      )}
                     </div>
                   </TabsContent>
                 </Tabs>
               </CardContent>
             </Card>
-          </div>
-          
-          <div className="lg:col-span-1">
-            <Card className="tech-card h-full">
+            
+            <Card>
               <CardHeader>
-                <CardTitle>Compliance Resources</CardTitle>
+                <CardTitle>Suggested Questions</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-4">
-                  <div className="p-3 border border-border rounded-lg hover:border-complimate-purple/50 transition-colors">
-                    <h3 className="font-medium text-complimate-purple">GDPR Guidelines</h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      European data protection regulations explained.
-                    </p>
-                  </div>
-                  
-                  <div className="p-3 border border-border rounded-lg hover:border-complimate-purple/50 transition-colors">
-                    <h3 className="font-medium text-complimate-purple">CCPA Compliance</h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      California Consumer Privacy Act requirements.
-                    </p>
-                  </div>
-                  
-                  <div className="p-3 border border-border rounded-lg hover:border-complimate-purple/50 transition-colors">
-                    <h3 className="font-medium text-complimate-purple">HIPAA Framework</h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Healthcare data security standards.
-                    </p>
-                  </div>
-                  
-                  <div className="p-3 border border-border rounded-lg hover:border-complimate-purple/50 transition-colors">
-                    <h3 className="font-medium text-complimate-purple">SOC 2 Guide</h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Security compliance for service organizations.
-                    </p>
-                  </div>
-                </div>
+              <CardContent className="space-y-2">
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start text-left p-2 h-auto"
+                  onClick={() => {}}
+                >
+                  How do I comply with GDPR?
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start text-left p-2 h-auto"
+                  onClick={() => {}}
+                >
+                  What are SOC 2 requirements?
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start text-left p-2 h-auto"
+                  onClick={() => {}}
+                >
+                  Explain HIPAA compliance
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start text-left p-2 h-auto"
+                  onClick={() => {}}
+                >
+                  California labor law changes 2025
+                </Button>
               </CardContent>
             </Card>
+          </div>
+          
+          <div className="md:w-2/3 lg:w-3/4">
+            <ChatInterface 
+              documentContext={chatContext} 
+              activeDocument={activeDocument}
+              onChatComplete={loadUserData}
+            />
           </div>
         </div>
       </div>

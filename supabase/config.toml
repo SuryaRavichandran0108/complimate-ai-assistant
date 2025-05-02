@@ -1,1 +1,5 @@
+
 project_id = "bjflfyglzmquqjfovcmd"
+
+[functions.ask-agent]
+verify_jwt = true

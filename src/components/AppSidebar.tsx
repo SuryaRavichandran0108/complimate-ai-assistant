@@ -1,142 +1,125 @@
 
-import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { 
-  Shield, 
-  MessageSquare, 
-  ClipboardCheck, 
-  FileText, 
-  Calendar, 
-  Clock,
-  User
-} from 'lucide-react';
+import React, { useState } from 'react';
+import { NavLink } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import { Shield, MessageSquare, CheckSquare, FileText, ArrowLeft, LogIn, LogOut } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
 
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarRail
-} from "@/components/ui/sidebar";
-
-// Menu items
-const navigationItems = [
-  {
-    title: "Dashboard",
-    path: "/",
-    icon: Shield,
-  },
-  {
-    title: "Ask Agent",
-    path: "/ask-agent",
-    icon: MessageSquare,
-  },
-  {
-    title: "Tasks",
-    path: "/tasks",
-    icon: ClipboardCheck,
-  },
-  {
-    title: "Documents",
-    path: "/documents",
-    icon: FileText,
-  }
-];
-
-export function AppSidebar() {
-  const location = useLocation();
-  
-  return (
-    <Sidebar className="border-r border-sidebar-border" collapsible="icon">
-      <SidebarRail />
-      <SidebarHeader className="flex items-center justify-center py-4">
-        <div className="flex items-center space-x-2 px-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-complimate-purple">
-            <Shield className="h-4 w-4 text-white" />
-          </div>
-          <span className="text-lg font-bold text-complimate-purple">CompliMate</span>
-        </div>
-      </SidebarHeader>
-      
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {navigationItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton 
-                    asChild 
-                    isActive={location.pathname === item.path}
-                    tooltip={item.title}
-                  >
-                    <Link to={item.path}>
-                      <item.icon />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-        
-        <SidebarGroup>
-          <SidebarGroupLabel>Resources</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip="Compliance Guides">
-                  <a href="#">
-                    <FileText />
-                    <span>Compliance Guides</span>
-                  </a>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip="Upcoming Deadlines">
-                  <a href="#">
-                    <Calendar />
-                    <span>Upcoming Deadlines</span>
-                  </a>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip="Recent Updates">
-                  <a href="#">
-                    <Clock />
-                    <span>Recent Updates</span>
-                  </a>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      </SidebarContent>
-      
-      <SidebarFooter>
-        <div className="p-3">
-          <div className="flex items-center gap-3 rounded-lg p-2 hover:bg-sidebar-accent transition-colors">
-            <div className="h-8 w-8 rounded-full overflow-hidden">
-              <img 
-                src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" 
-                alt="User" 
-                className="h-full w-full object-cover"
-              />
-            </div>
-            <div>
-              <p className="text-sm font-medium">Sarah Johnson</p>
-              <p className="text-xs text-muted-foreground">Acme Corp, LLC</p>
-            </div>
-          </div>
-        </div>
-      </SidebarFooter>
-    </Sidebar>
-  );
+interface NavItemProps {
+  to: string;
+  icon: React.ReactNode;
+  label: string;
 }
+
+const NavItem: React.FC<NavItemProps> = ({ to, icon, label }) => (
+  <NavLink
+    to={to}
+    className={({ isActive }) =>
+      cn(
+        "flex items-center gap-3 rounded-lg px-3 py-2 text-gray-500 transition-all hover:text-complimate-purple",
+        isActive ? "bg-complimate-soft-gray text-complimate-purple" : ""
+      )
+    }
+  >
+    {icon}
+    <span className="font-medium">{label}</span>
+  </NavLink>
+);
+
+const AppSidebar: React.FC = () => {
+  const [collapsed, setCollapsed] = useState(false);
+  const { user, signOut } = useAuth();
+  const { toast } = useToast();
+
+  const handleSignOut = async () => {
+    await signOut();
+    toast({
+      title: "Signed out",
+      description: "You have been successfully signed out.",
+    });
+  };
+
+  return (
+    <div className={cn(
+      "bg-sidebar-background text-sidebar-foreground h-screen border-r border-complimate-dark-purple/20 flex flex-col transition-all duration-300",
+      collapsed ? "w-16" : "w-64"
+    )}>
+      <div className="p-4">
+        <div className={cn(
+          "flex items-center",
+          collapsed ? "justify-center" : "justify-between"
+        )}>
+          {!collapsed && (
+            <div className="flex items-center gap-2">
+              <Shield className="text-complimate-purple" size={24} />
+              <span className="font-bold text-lg">CompliMate</span>
+            </div>
+          )}
+          {collapsed && (
+            <Shield className="text-complimate-purple" size={24} />
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setCollapsed(!collapsed)}
+            className={collapsed ? "rotate-180" : ""}
+          >
+            <ArrowLeft size={16} />
+          </Button>
+        </div>
+      </div>
+
+      <nav className="flex-1 overflow-y-auto p-3 space-y-2">
+        <NavItem 
+          to="/" 
+          icon={<Shield size={collapsed ? 20 : 18} />} 
+          label={collapsed ? "" : "Dashboard"} 
+        />
+        <NavItem 
+          to="/ask-agent" 
+          icon={<MessageSquare size={collapsed ? 20 : 18} />} 
+          label={collapsed ? "" : "Ask Agent"} 
+        />
+        <NavItem 
+          to="/tasks" 
+          icon={<CheckSquare size={collapsed ? 20 : 18} />} 
+          label={collapsed ? "" : "Tasks"} 
+        />
+        <NavItem 
+          to="/documents" 
+          icon={<FileText size={collapsed ? 20 : 18} />} 
+          label={collapsed ? "" : "Documents"} 
+        />
+      </nav>
+
+      <div className="p-4">
+        {user ? (
+          <>
+            {!collapsed && <p className="text-xs text-muted-foreground mb-2">Signed in as {user.email}</p>}
+            <Button 
+              variant="ghost" 
+              onClick={handleSignOut} 
+              className={cn("w-full justify-start", collapsed && "justify-center")}
+            >
+              <LogOut size={18} className={cn("mr-2", collapsed && "mr-0")} />
+              {!collapsed && "Sign Out"}
+            </Button>
+          </>
+        ) : (
+          <Button 
+            variant="outline" 
+            onClick={() => window.location.href = '/auth'} 
+            className={cn("w-full justify-start", collapsed && "justify-center")}
+          >
+            <LogIn size={18} className={cn("mr-2", collapsed && "mr-0")} />
+            {!collapsed && "Sign In"}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default AppSidebar;

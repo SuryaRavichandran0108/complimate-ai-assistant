@@ -1,97 +1,84 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, FileText, Upload, FolderOpen, FileUp, Clock, Star, Filter, Grid, List, Plus } from 'lucide-react';
+import { Search, FileText, Upload, FolderOpen, FileUp, Clock, Star, Filter, Grid, List, Plus, Trash2 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
+import { useAuth } from '@/contexts/AuthContext';
+import { getUserDocuments, deleteDocument, getDocumentUrl } from '@/utils/documentUtils';
+import DocumentUpload from '@/components/DocumentUpload';
+import { useToast } from '@/hooks/use-toast';
 
 const Documents: React.FC = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const { user } = useAuth();
+  const { toast } = useToast();
   
-  const recentDocuments = [
-    {
-      id: 1,
-      name: 'Privacy Policy v2.1',
-      type: 'pdf',
-      size: '420 KB',
-      lastModified: '2025-04-28',
-      tags: ['Privacy', 'Legal'],
-      status: 'reviewed'
-    },
-    {
-      id: 2,
-      name: 'Employee Handbook 2025',
-      type: 'docx',
-      size: '1.2 MB',
-      lastModified: '2025-04-22',
-      tags: ['HR', 'Policies'],
-      status: 'pending'
-    },
-    {
-      id: 3,
-      name: 'Data Processing Agreement',
-      type: 'pdf',
-      size: '380 KB',
-      lastModified: '2025-04-15',
-      tags: ['Legal', 'GDPR'],
-      status: 'reviewed'
-    },
-    {
-      id: 4,
-      name: 'CCPA Compliance Checklist',
-      type: 'xlsx',
-      size: '250 KB',
-      lastModified: '2025-04-10',
-      tags: ['Compliance', 'Privacy'],
-      status: 'pending'
+  useEffect(() => {
+    if (user) {
+      loadDocuments();
+    } else {
+      setDocuments([]);
+      setIsLoading(false);
     }
-  ];
+  }, [user]);
   
-  const starredDocuments = [
-    {
-      id: 5,
-      name: 'Security Protocol v1.3',
-      type: 'pdf',
-      size: '520 KB',
-      lastModified: '2025-04-05',
-      tags: ['Security', 'Internal'],
-      status: 'reviewed'
-    },
-    {
-      id: 6,
-      name: 'Vendor Assessment Form',
-      type: 'docx',
-      size: '340 KB',
-      lastModified: '2025-03-30',
-      tags: ['Vendors', 'Assessment'],
-      status: 'reviewed'
-    }
-  ];
+  const loadDocuments = async () => {
+    if (!user) return;
+    
+    setIsLoading(true);
+    const docs = await getUserDocuments(user.id);
+    setDocuments(docs || []);
+    setIsLoading(false);
+  };
   
-  const getFileIcon = (type: string) => {
-    switch(type) {
-      case 'pdf':
-        return <FileText className="text-red-500" />;
-      case 'docx':
-        return <FileText className="text-blue-500" />;
-      case 'xlsx':
-        return <FileText className="text-green-500" />;
-      default:
-        return <FileText className="text-gray-500" />;
+  const handleDeleteDocument = async (documentId: string, storagePath: string) => {
+    if (!user) return;
+    
+    const result = await deleteDocument(documentId, storagePath);
+    
+    if (result.success) {
+      setDocuments(documents.filter(doc => doc.id !== documentId));
+      toast({
+        title: "Document deleted",
+        description: "The document has been successfully deleted.",
+      });
+    } else {
+      toast({
+        title: "Delete failed",
+        description: "There was an error deleting the document.",
+        variant: "destructive",
+      });
     }
   };
   
-  const getStatusBadge = (status: string) => {
-    switch(status) {
-      case 'reviewed':
-        return <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-green-900/30 text-green-300">Reviewed</span>;
-      case 'pending':
-        return <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-yellow-900/30 text-yellow-300">Pending Review</span>;
+  const handleOpenDocument = async (storagePath: string) => {
+    const url = await getDocumentUrl(storagePath);
+    
+    if (url) {
+      window.open(url, '_blank');
+    } else {
+      toast({
+        title: "Error",
+        description: "Could not open the document.",
+        variant: "destructive",
+      });
+    }
+  };
+  
+  const getFileIcon = (type: string) => {
+    switch(type) {
+      case 'application/pdf':
+        return <FileText className="text-red-500" />;
+      case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+        return <FileText className="text-blue-500" />;
       default:
-        return <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-gray-900/30 text-gray-300">Draft</span>;
+        return <FileText className="text-gray-500" />;
     }
   };
   
@@ -104,32 +91,33 @@ const Documents: React.FC = () => {
             <div>
               <h3 className="font-medium text-foreground">{document.name}</h3>
               <p className="text-xs text-muted-foreground">
-                {document.type.toUpperCase()} • {document.size}
+                {document.type.includes('pdf') ? 'PDF' : 'DOCX'} • {Math.round(document.size / 1024)} KB
               </p>
             </div>
           </div>
-          <Button variant="ghost" size="icon" className="rounded-full">
-            <Star size={16} className="text-yellow-500 fill-yellow-500" />
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="rounded-full hover:text-red-500"
+            onClick={() => handleDeleteDocument(document.id, document.storage_path)}
+          >
+            <Trash2 size={16} />
           </Button>
         </div>
         
-        <div className="flex flex-wrap gap-2 mb-3">
-          {document.tags.map((tag, index) => (
-            <span 
-              key={index} 
-              className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-secondary/50 text-secondary-foreground"
-            >
-              {tag}
-            </span>
-          ))}
-        </div>
-        
-        <div className="flex justify-between items-center">
+        <div className="mt-4 flex justify-between items-center">
           <div className="text-xs text-muted-foreground flex items-center">
             <Clock size={12} className="mr-1" />
-            {document.lastModified}
+            {new Date(document.created_at).toLocaleDateString()}
           </div>
-          {getStatusBadge(document.status)}
+          
+          <Button
+            size="sm" 
+            variant="outline"
+            onClick={() => handleOpenDocument(document.storage_path)}
+          >
+            View
+          </Button>
         </div>
       </CardContent>
     </Card>
@@ -142,33 +130,34 @@ const Documents: React.FC = () => {
         {getFileIcon(document.type)}
         <div>
           <h3 className="font-medium text-foreground">{document.name}</h3>
-          <div className="flex flex-wrap gap-2">
-            {document.tags.map((tag, index) => (
-              <span 
-                key={index} 
-                className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-secondary/50 text-secondary-foreground"
-              >
-                {tag}
-              </span>
-            ))}
+          <div className="text-xs text-muted-foreground">
+            {document.type.includes('pdf') ? 'PDF' : 'DOCX'} • {Math.round(document.size / 1024)} KB
           </div>
         </div>
       </div>
       
       <div className="flex items-center gap-6">
         <div className="text-xs text-muted-foreground">
-          {document.lastModified}
+          {new Date(document.created_at).toLocaleDateString()}
         </div>
         
-        <div className="text-xs text-muted-foreground">
-          {document.size}
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => handleOpenDocument(document.storage_path)}
+          >
+            View
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-red-500"
+            onClick={() => handleDeleteDocument(document.id, document.storage_path)}
+          >
+            <Trash2 size={16} />
+          </Button>
         </div>
-        
-        {getStatusBadge(document.status)}
-        
-        <Button variant="ghost" size="icon" className="rounded-full">
-          <Star size={16} className={document.id > 4 ? "text-yellow-500 fill-yellow-500" : ""} />
-        </Button>
       </div>
     </div>
   );
@@ -183,156 +172,96 @@ const Documents: React.FC = () => {
               Manage your compliance documents and files
             </p>
           </div>
-          <div className="flex gap-3">
-            <Button variant="outline" className="flex items-center gap-2">
-              <FolderOpen size={16} />
-              Browse
-            </Button>
-            <Button className="flex items-center gap-2">
-              <Upload size={16} />
-              Upload
-            </Button>
-          </div>
-        </div>
-        
-        <div className="mb-6">
-          <Card className="tech-card">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div className="relative flex-grow max-w-md">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={18} />
-                  <Input
-                    type="search"
-                    placeholder="Search documents..."
-                    className="pl-10"
-                  />
-                </div>
-                
-                <div className="flex items-center gap-4">
-                  <Button variant="outline" className="flex items-center gap-2">
-                    <Filter size={16} />
-                    Filter
-                  </Button>
-                  
-                  <div className="bg-secondary rounded-lg flex">
-                    <Button 
-                      variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
-                      size="icon"
-                      onClick={() => setViewMode('grid')}
-                      className="rounded-r-none"
-                    >
-                      <Grid size={16} />
-                    </Button>
-                    <Button 
-                      variant={viewMode === 'list' ? 'secondary' : 'ghost'}
-                      size="icon" 
-                      onClick={() => setViewMode('list')}
-                      className="rounded-l-none"
-                    >
-                      <List size={16} />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-        
-        <Tabs defaultValue="recent">
-          <TabsList className="mb-6">
-            <TabsTrigger value="recent">Recent</TabsTrigger>
-            <TabsTrigger value="starred">Starred</TabsTrigger>
-            <TabsTrigger value="all">All Documents</TabsTrigger>
-          </TabsList>
           
-          <TabsContent value="recent">
-            {viewMode === 'grid' ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {recentDocuments.map(doc => (
-                  <DocumentCard key={doc.id} document={doc} />
-                ))}
-                <Card className="tech-card border-dashed flex flex-col items-center justify-center p-6 h-full">
-                  <FileUp size={32} className="text-muted-foreground mb-3" />
-                  <p className="text-muted-foreground text-center mb-3">
-                    Drop files here or click to upload
+          {user && (
+            <div className="flex gap-3">
+              <Button className="flex items-center gap-2" onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}>
+                {viewMode === 'grid' ? <List size={16} /> : <Grid size={16} />}
+                {viewMode === 'grid' ? 'List View' : 'Grid View'}
+              </Button>
+            </div>
+          )}
+        </div>
+        
+        {user ? (
+          <>
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle>Upload New Document</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <DocumentUpload />
+              </CardContent>
+            </Card>
+            
+            <div className="mb-6">
+              <Card className="tech-card">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div className="relative flex-grow max-w-md">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={18} />
+                      <Input
+                        type="search"
+                        placeholder="Search documents..."
+                        className="pl-10"
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+            
+            {isLoading ? (
+              <div className="flex justify-center py-12">
+                <p>Loading documents...</p>
+              </div>
+            ) : (
+              documents.length > 0 ? (
+                <>
+                  {viewMode === 'grid' ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {documents.map(doc => (
+                        <DocumentCard key={doc.id} document={doc} />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="flex items-center p-3 bg-muted rounded-lg text-sm font-medium">
+                        <div className="w-6 mr-3"></div>
+                        <div className="flex-1">Name</div>
+                        <div className="flex items-center gap-6">
+                          <div className="w-24">Date</div>
+                          <div className="w-36"></div>
+                        </div>
+                      </div>
+                      {documents.map(doc => (
+                        <DocumentRow key={doc.id} document={doc} />
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-center py-12">
+                  <FileUp size={48} className="text-muted-foreground mx-auto mb-4" />
+                  <h3 className="font-medium text-lg mb-2">No documents yet</h3>
+                  <p className="text-muted-foreground mb-6">
+                    Upload your first document to get started with compliance analysis
                   </p>
-                  <Button className="flex items-center gap-2">
-                    <Plus size={16} />
-                    Add Document
-                  </Button>
-                </Card>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="flex items-center p-3 bg-muted rounded-lg text-sm font-medium">
-                  <div className="w-6 mr-3"></div>
-                  <div className="flex-1">Name</div>
-                  <div className="flex items-center gap-6">
-                    <div className="w-24">Date</div>
-                    <div className="w-24">Size</div>
-                    <div className="w-28">Status</div>
-                    <div className="w-10"></div>
-                  </div>
                 </div>
-                {recentDocuments.map(doc => (
-                  <DocumentRow key={doc.id} document={doc} />
-                ))}
-              </div>
+              )
             )}
-          </TabsContent>
-          
-          <TabsContent value="starred">
-            {viewMode === 'grid' ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {starredDocuments.map(doc => (
-                  <DocumentCard key={doc.id} document={doc} />
-                ))}
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="flex items-center p-3 bg-muted rounded-lg text-sm font-medium">
-                  <div className="w-6 mr-3"></div>
-                  <div className="flex-1">Name</div>
-                  <div className="flex items-center gap-6">
-                    <div className="w-24">Date</div>
-                    <div className="w-24">Size</div>
-                    <div className="w-28">Status</div>
-                    <div className="w-10"></div>
-                  </div>
-                </div>
-                {starredDocuments.map(doc => (
-                  <DocumentRow key={doc.id} document={doc} />
-                ))}
-              </div>
-            )}
-          </TabsContent>
-          
-          <TabsContent value="all">
-            {viewMode === 'grid' ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {[...recentDocuments, ...starredDocuments].map(doc => (
-                  <DocumentCard key={doc.id} document={doc} />
-                ))}
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="flex items-center p-3 bg-muted rounded-lg text-sm font-medium">
-                  <div className="w-6 mr-3"></div>
-                  <div className="flex-1">Name</div>
-                  <div className="flex items-center gap-6">
-                    <div className="w-24">Date</div>
-                    <div className="w-24">Size</div>
-                    <div className="w-28">Status</div>
-                    <div className="w-10"></div>
-                  </div>
-                </div>
-                {[...recentDocuments, ...starredDocuments].map(doc => (
-                  <DocumentRow key={doc.id} document={doc} />
-                ))}
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
+          </>
+        ) : (
+          <Card className="p-8 text-center">
+            <h2 className="text-xl font-semibold mb-4">Sign In Required</h2>
+            <p className="mb-6 text-muted-foreground">
+              Please sign in to view and manage your documents
+            </p>
+            <Button onClick={() => window.location.href = '/auth'}>
+              Sign In
+            </Button>
+          </Card>
+        )}
       </div>
     </Layout>
   );
