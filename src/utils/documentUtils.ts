@@ -23,6 +23,7 @@ export const uploadDocument = async (file: File, userId: string) => {
         type: file.type,
         size: file.size,
         storage_path: filePath,
+        status: 'processing' // Initial status is 'processing'
       })
       .select()
       .single();
@@ -54,6 +55,13 @@ export const processDocument = async (documentId: string, userId: string) => {
     
     if (processError) {
       console.error('Error processing document:', processError);
+      
+      // Update document status to 'error'
+      await supabase
+        .from('documents')
+        .update({ status: 'error' })
+        .eq('id', documentId);
+        
       return { success: false, error: processError };
     }
     
@@ -69,7 +77,14 @@ export const processDocument = async (documentId: string, userId: string) => {
     
     if (embedError) {
       console.error('Error generating embeddings:', embedError);
-      // Still return success since document processing worked
+      
+      // Update document status to 'error' if embedding fails
+      await supabase
+        .from('documents')
+        .update({ status: 'error' })
+        .eq('id', documentId);
+      
+      return { success: false, error: embedError };
     }
     
     return { 
@@ -79,6 +94,13 @@ export const processDocument = async (documentId: string, userId: string) => {
     };
   } catch (error) {
     console.error('Error in document processing workflow:', error);
+    
+    // Update document status to 'error'
+    await supabase
+      .from('documents')
+      .update({ status: 'error' })
+      .eq('id', documentId);
+      
     return { success: false, error };
   }
 };
@@ -117,6 +139,17 @@ export const getUserDocuments = async (userId: string) => {
 
 export const deleteDocument = async (documentId: string, storagePath: string) => {
   try {
+    // First delete associated chunks to prevent foreign key constraints
+    const { error: chunksError } = await supabase
+      .from('document_chunks')
+      .delete()
+      .eq('document_id', documentId);
+    
+    if (chunksError) {
+      console.error('Error deleting document chunks:', chunksError);
+      // Continue with deletion anyway, as storage file might still be removed
+    }
+    
     // Delete from storage
     const { error: storageError } = await supabase.storage
       .from('compliance_documents')
@@ -158,6 +191,26 @@ export const getDocumentChunks = async (documentId: string) => {
 
 export const getDocumentProcessingStatus = async (documentId: string) => {
   try {
+    // First check document status from documents table
+    const { data: document, error: documentError } = await supabase
+      .from('documents')
+      .select('status')
+      .eq('id', documentId)
+      .single();
+    
+    if (documentError) throw documentError;
+    
+    // If document status is explicitly set, return it
+    if (document.status === 'ready' || document.status === 'error') {
+      return {
+        total: 0,
+        embedded: 0,
+        isComplete: document.status === 'ready',
+        progress: document.status === 'ready' ? 100 : 0,
+        status: document.status
+      };
+    }
+    
     // Get total chunks
     const { count: totalCount, error: countError } = await supabase
       .from('document_chunks')
@@ -175,14 +228,31 @@ export const getDocumentProcessingStatus = async (documentId: string) => {
       
     if (embeddedError) throw embeddedError;
     
+    const isComplete = totalCount > 0 && embeddedCount === totalCount;
+    
+    // If embedding is complete, update document status to 'ready'
+    if (isComplete && document.status !== 'ready') {
+      await supabase
+        .from('documents')
+        .update({ status: 'ready' })
+        .eq('id', documentId);
+    }
+    
     return {
       total: totalCount || 0,
       embedded: embeddedCount || 0,
-      isComplete: totalCount > 0 && embeddedCount === totalCount,
-      progress: totalCount ? Math.round((embeddedCount / totalCount) * 100) : 0
+      isComplete,
+      progress: totalCount ? Math.round((embeddedCount / totalCount) * 100) : 0,
+      status: isComplete ? 'ready' : 'processing'
     };
   } catch (error) {
     console.error('Error getting document processing status:', error);
-    return { total: 0, embedded: 0, isComplete: false, progress: 0 };
+    return { 
+      total: 0, 
+      embedded: 0, 
+      isComplete: false, 
+      progress: 0,
+      status: 'error' 
+    };
   }
 };

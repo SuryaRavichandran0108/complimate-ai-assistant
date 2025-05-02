@@ -11,7 +11,8 @@ const corsHeaders = {
 // Batch size for processing chunks
 const BATCH_SIZE = 5;
 const MAX_RETRIES = 3;
-const RETRY_DELAY = 1000;
+const RETRY_DELAY_MS = 1000;
+const MIN_CHUNK_LENGTH = 50; // Minimum words in a chunk
 
 interface DocumentChunk {
   id: string;
@@ -21,6 +22,13 @@ interface DocumentChunk {
 }
 
 async function generateEmbedding(text: string, retries = 0): Promise<number[] | null> {
+  // Skip short text chunks
+  const wordCount = text.trim().split(/\s+/).length;
+  if (wordCount < MIN_CHUNK_LENGTH) {
+    console.log(`Skipping chunk with only ${wordCount} words (minimum ${MIN_CHUNK_LENGTH})`);
+    return null;
+  }
+  
   try {
     const openaiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openaiKey) {
@@ -44,8 +52,9 @@ async function generateEmbedding(text: string, retries = 0): Promise<number[] | 
       console.error(`OpenAI API error: ${error}`);
       
       if (retries < MAX_RETRIES) {
-        console.log(`Retrying in ${RETRY_DELAY}ms (${retries + 1}/${MAX_RETRIES})`);
-        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+        const delayMs = RETRY_DELAY_MS * Math.pow(2, retries); // Exponential backoff
+        console.log(`Retrying in ${delayMs}ms (${retries + 1}/${MAX_RETRIES})`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
         return generateEmbedding(text, retries + 1);
       }
       
@@ -58,8 +67,9 @@ async function generateEmbedding(text: string, retries = 0): Promise<number[] | 
     console.error('Error generating embedding:', error);
     
     if (retries < MAX_RETRIES) {
-      console.log(`Retrying in ${RETRY_DELAY}ms (${retries + 1}/${MAX_RETRIES})`);
-      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+      const delayMs = RETRY_DELAY_MS * Math.pow(2, retries); // Exponential backoff
+      console.log(`Retrying in ${delayMs}ms (${retries + 1}/${MAX_RETRIES})`);
+      await new Promise(resolve => setTimeout(resolve, delayMs));
       return generateEmbedding(text, retries + 1);
     }
     
@@ -74,18 +84,47 @@ async function processChunkBatch(chunks: DocumentChunk[], supabaseClient: any): 
     try {
       console.log(`Processing chunk ${chunk.id} (index: ${chunk.chunk_index})`);
       
+      // Skip chunks that are too short
+      const wordCount = chunk.chunk_text.trim().split(/\s+/).length;
+      if (wordCount < MIN_CHUNK_LENGTH) {
+        console.log(`Skipping chunk ${chunk.id} with only ${wordCount} words (minimum ${MIN_CHUNK_LENGTH})`);
+        
+        // Mark as skipped by setting a flag in metadata
+        await supabaseClient
+          .from('document_chunks')
+          .update({ 
+            embedding_vector: [],
+            chunk_metadata: { ...chunk.chunk_metadata, skipped: true, reason: 'too_short', word_count: wordCount }
+          })
+          .eq('id', chunk.id);
+        
+        continue;
+      }
+      
       // Generate embedding for chunk text
       const embedding = await generateEmbedding(chunk.chunk_text);
       
       if (!embedding) {
         console.error(`Failed to generate embedding for chunk ${chunk.id}`);
+        
+        // Mark as failed
+        await supabaseClient
+          .from('document_chunks')
+          .update({ 
+            chunk_metadata: { ...chunk.chunk_metadata, embedding_failed: true }
+          })
+          .eq('id', chunk.id);
+        
         continue;
       }
       
       // Update chunk with embedding
       const { error } = await supabaseClient
         .from('document_chunks')
-        .update({ embedding_vector: embedding })
+        .update({ 
+          embedding_vector: embedding,
+          chunk_metadata: { ...chunk.chunk_metadata, embedding_completed: true }
+        })
         .eq('id', chunk.id);
       
       if (error) {
@@ -100,6 +139,57 @@ async function processChunkBatch(chunks: DocumentChunk[], supabaseClient: any): 
   }
   
   return successCount;
+}
+
+async function updateDocumentStatus(documentId: string, supabaseClient: any) {
+  try {
+    // Check total chunks
+    const { count: totalCount, error: countError } = await supabaseClient
+      .from('document_chunks')
+      .select('*', { count: 'exact', head: true })
+      .eq('document_id', documentId);
+      
+    if (countError) throw countError;
+    
+    if (totalCount === 0) {
+      // No chunks found, mark as error
+      await supabaseClient
+        .from('documents')
+        .update({ status: 'error' })
+        .eq('id', documentId);
+      
+      return false;
+    }
+    
+    // Get embedded chunks (including skipped ones)
+    const { count: embeddedCount, error: embeddedError } = await supabaseClient
+      .from('document_chunks')
+      .select('*', { count: 'exact', head: true })
+      .eq('document_id', documentId)
+      .not('embedding_vector', 'is', null);
+      
+    if (embeddedError) throw embeddedError;
+    
+    const isComplete = embeddedCount === totalCount;
+    
+    if (isComplete) {
+      // All chunks are embedded, mark as ready
+      await supabaseClient
+        .from('documents')
+        .update({ status: 'ready' })
+        .eq('id', documentId);
+      
+      console.log(`Document ${documentId} marked as ready (${embeddedCount}/${totalCount} chunks embedded)`);
+      return true;
+    }
+    
+    // Still processing
+    console.log(`Document ${documentId} still processing (${embeddedCount}/${totalCount} chunks embedded)`);
+    return false;
+  } catch (error) {
+    console.error(`Error updating document status:`, error);
+    return false;
+  }
 }
 
 serve(async (req) => {
@@ -122,7 +212,7 @@ serve(async (req) => {
     
     // Get request body
     const requestData = await req.json();
-    const { document_id, user_id, limit = 50 } = requestData;
+    const { document_id, user_id, limit = 50, retries = MAX_RETRIES } = requestData;
     
     // Verify user_id is provided for security
     if (!user_id) {
@@ -135,7 +225,7 @@ serve(async (req) => {
     // Construct query to get chunks without embeddings
     let query = supabaseClient
       .from('document_chunks')
-      .select('id, document_id, chunk_text, chunk_index')
+      .select('id, document_id, chunk_text, chunk_index, chunk_metadata')
       .is('embedding_vector', null)
       .order('created_at', { ascending: true })
       .limit(limit);
@@ -177,6 +267,20 @@ serve(async (req) => {
     }
     
     if (!chunks || chunks.length === 0) {
+      // No chunks to process, check if processing is complete
+      if (document_id) {
+        const isComplete = await updateDocumentStatus(document_id, supabaseClient);
+        
+        return new Response(
+          JSON.stringify({ 
+            message: isComplete ? 'Document processing complete' : 'No more chunks to process',
+            processed: 0,
+            status: isComplete ? 'ready' : 'processing'
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
       return new Response(
         JSON.stringify({ message: 'No chunks to process', processed: 0 }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -196,6 +300,11 @@ serve(async (req) => {
       if (i + BATCH_SIZE < chunks.length) {
         await new Promise(resolve => setTimeout(resolve, 500));
       }
+    }
+    
+    // Update document status if processing a single document
+    if (document_id) {
+      await updateDocumentStatus(document_id, supabaseClient);
     }
     
     return new Response(

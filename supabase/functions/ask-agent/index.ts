@@ -1,3 +1,4 @@
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.43.0';
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 
@@ -21,7 +22,9 @@ interface DocumentChunk {
   similarity: number;
 }
 
-async function generateEmbedding(text: string): Promise<number[] | null> {
+const MIN_CHUNK_LENGTH = 30; // Minimum words in a chunk
+
+async function generateEmbedding(text: string, retries = 0): Promise<number[] | null> {
   try {
     const openaiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openaiKey) {
@@ -48,7 +51,68 @@ async function generateEmbedding(text: string): Promise<number[] | null> {
     return data.data[0].embedding;
   } catch (error) {
     console.error('Error generating embedding:', error);
+    
+    if (retries < 3) {
+      // Exponential backoff for retries
+      const delay = 1000 * Math.pow(2, retries);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return generateEmbedding(text, retries + 1);
+    }
+    
     return null;
+  }
+}
+
+async function validateDocument(
+  supabaseClient: any,
+  documentId: string,
+  userId: string
+): Promise<{ valid: boolean; status?: string; message?: string }> {
+  try {
+    // Check if document exists and belongs to user
+    const { data: document, error: docError } = await supabaseClient
+      .from('documents')
+      .select('status')
+      .eq('id', documentId)
+      .eq('user_id', userId)
+      .single();
+      
+    if (docError) {
+      console.error('Error validating document:', docError);
+      return { valid: false, message: 'Document not found or you do not have access to it' };
+    }
+    
+    // Check document status
+    if (document.status !== 'ready') {
+      return { 
+        valid: false, 
+        status: document.status,
+        message: document.status === 'processing'
+          ? 'Document is still processing. Please wait.'
+          : 'Document processing failed. Please try re-uploading.'
+      };
+    }
+    
+    // Check if document has chunks
+    const { count, error: countError } = await supabaseClient
+      .from('document_chunks')
+      .select('*', { count: 'exact', head: true })
+      .eq('document_id', documentId)
+      .not('embedding_vector', 'is', null);
+    
+    if (countError) {
+      console.error('Error counting document chunks:', countError);
+      return { valid: false, message: 'Failed to validate document chunks' };
+    }
+    
+    if (!count || count === 0) {
+      return { valid: false, message: 'No searchable content found in this document' };
+    }
+    
+    return { valid: true };
+  } catch (error) {
+    console.error('Error in validateDocument:', error);
+    return { valid: false, message: 'Error validating document' };
   }
 }
 
@@ -61,8 +125,16 @@ async function searchSimilarChunks(
   limit = 5
 ): Promise<DocumentChunk[]> {
   try {
-    // If document_id is provided, only search within that document
-    // Otherwise, search across all user's documents
+    // If document_id is provided, verify document first
+    if (documentId) {
+      const validation = await validateDocument(supabaseClient, documentId, userId);
+      if (!validation.valid) {
+        console.error('Document validation failed:', validation.message);
+        return [];
+      }
+    }
+    
+    // Prepare the match parameters
     let matchFunctionParams: any = {
       query_embedding: queryEmbedding,
       match_threshold: threshold,
@@ -70,8 +142,12 @@ async function searchSimilarChunks(
       user_id: userId
     };
     
+    // Add document_id if provided
+    if (documentId) {
+      matchFunctionParams.document_id = documentId;
+    }
+    
     // Use Postgres function for similarity search
-    // This requires the match_document_chunks function to be created
     const { data, error } = await supabaseClient.rpc(
       'match_document_chunks', 
       matchFunctionParams
@@ -80,17 +156,15 @@ async function searchSimilarChunks(
     if (error) {
       console.error('Error searching similar chunks:', error);
       
-      // If we don't have the vector search function or pgvector, fallback to simpler approach
-      // In a real implementation, you would implement a JavaScript-based similarity search here
-      
-      // For now, just return chunks from the specified document or recent chunks
+      // Fallback approach
       const { data: fallbackData, error: fallbackError } = await supabaseClient
         .from('document_chunks')
         .select(`
           id, 
           document_id, 
           chunk_text,
-          documents!inner(name)
+          chunk_metadata,
+          documents!inner(name, user_id)
         `)
         .eq('documents.user_id', userId)
         .limit(limit)
@@ -101,8 +175,14 @@ async function searchSimilarChunks(
         return [];
       }
       
+      // Filter out chunks that are too short
+      const validChunks = (fallbackData || []).filter(chunk => {
+        const wordCount = chunk.chunk_text.trim().split(/\s+/).length;
+        return wordCount >= MIN_CHUNK_LENGTH;
+      });
+      
       // Format the fallback results to match expected structure
-      return (fallbackData || []).map((chunk: any) => ({
+      return validChunks.map((chunk: any) => ({
         id: chunk.id,
         document_id: chunk.document_id,
         chunk_text: chunk.chunk_text,
@@ -111,7 +191,11 @@ async function searchSimilarChunks(
       }));
     }
     
-    return data || [];
+    // Filter out chunks that are too short
+    return (data || []).filter((chunk: DocumentChunk) => {
+      const wordCount = chunk.chunk_text.trim().split(/\s+/).length;
+      return wordCount >= MIN_CHUNK_LENGTH;
+    });
   } catch (error) {
     console.error('Error in chunk similarity search:', error);
     return [];
@@ -125,10 +209,11 @@ const generateComplianceResponse = async (
   console.log("🚀 Starting generateComplianceResponse with query:", query);
   console.log("📄 Document chunks:", documentChunks.length);
   
-  // Prepare context from document chunks
-  let documentContext = '';
-  if (documentChunks.length > 0) {
-    documentContext = `
+  try {
+    // Prepare context from document chunks
+    let documentContext = '';
+    if (documentChunks.length > 0) {
+      documentContext = `
 You are analyzing the following document excerpts:
 
 ${documentChunks.map((chunk, i) => `[EXCERPT ${i+1} from ${chunk.document_name}]
@@ -136,9 +221,9 @@ ${chunk.chunk_text}
 `).join('\n\n')}
 
 Based on these excerpts, `;
-  }
-  
-  const prompt = `
+    }
+    
+    const prompt = `
 ${documentContext}You are a compliance advisor for small U.S. businesses. ${documentChunks.length > 0 ? 'Use the provided excerpts to ' : ''}Answer this question:
 "${query}"
 
@@ -151,10 +236,11 @@ Use plain language. Reference relevant U.S. laws or common best practices if pos
 ${documentChunks.length > 0 ? 'Make specific references to the document content when applicable.' : ''}
 `
 
-  const openaiKey = Deno.env.get('OPENAI_API_KEY')
-  console.log("🔑 OpenAI API key present:", !!openaiKey);
+    const openaiKey = Deno.env.get('OPENAI_API_KEY')
+    if (!openaiKey) {
+      throw new Error('OpenAI API key not configured');
+    }
 
-  try {
     console.log("🔌 Making request to OpenAI API...");
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -163,7 +249,7 @@ ${documentChunks.length > 0 ? 'Make specific references to the document content 
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini', // Updated to use an available model
+        model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: 'You are a helpful compliance assistant for SMBs.' },
           { role: 'user', content: prompt }
@@ -174,59 +260,65 @@ ${documentChunks.length > 0 ? 'Make specific references to the document content 
     
     console.log("🔍 OpenAI response status:", response.status, response.statusText);
     
-    const raw = await response.text();
-    console.log("🔍 OpenAI raw body:", raw.substring(0, 500) + (raw.length > 500 ? "..." : ""));
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("❌ OpenAI API error:", errorText);
+      throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
+    }
     
-    try {
-      const data = JSON.parse(raw);
-      const answer = data.choices?.[0]?.message?.content;
-      
-      if (!answer) {
-        console.error("❌ No content in OpenAI response");
-        return {
-          rawResponse: `The agent couldn't generate a response. API returned: ${raw.substring(0, 200)}...`,
-          compliantSections: [],
-          gaps: [],
-          suggestions: [],
-          documentChunks: documentChunks.map(dc => ({
-            chunk_text: dc.chunk_text,
-            document_name: dc.document_name,
-            similarity: dc.similarity
-          }))
-        };
+    const data = await response.json();
+    const answer = data.choices?.[0]?.message?.content;
+    
+    if (!answer) {
+      console.error("❌ No content in OpenAI response");
+      throw new Error('No content in AI response');
+    }
+    
+    // Extract suggested tasks from the response
+    const suggestionsRegex = /💡\s*Recommended\s*Improvements:([^#]*?)(?:\n\n|$)/is;
+    const suggestionsMatch = answer.match(suggestionsRegex);
+    let suggestions = [];
+    
+    if (suggestionsMatch && suggestionsMatch[1]) {
+      // Extract bullet points from the suggestions section
+      const bulletPoints = suggestionsMatch[1].match(/[•\-\*]\s*([^\n]+)/g);
+      if (bulletPoints) {
+        suggestions = bulletPoints.map(point => 
+          point.replace(/^[•\-\*]\s*/, '').trim()
+        );
       }
-      
-      return {
-        rawResponse: answer,
-        compliantSections: [],  // You can optionally parse these later
-        gaps: [],
-        suggestions: [],
-        documentChunks: documentChunks.map(dc => ({
-          chunk_text: dc.chunk_text,
-          document_name: dc.document_name,
-          similarity: dc.similarity
-        }))
-      };
-    } catch (err) {
-      console.error("❌ Failed to parse OpenAI response:", err);
-      return {
-        rawResponse: `The agent couldn't parse the AI response. Raw output: ${raw.substring(0, 200)}...`,
-        compliantSections: [],
-        gaps: [],
-        suggestions: [],
-        documentChunks: []
-      };
     }
-  } catch (err) {
-    console.error("❌ Error calling OpenAI:", err);
+    
     return {
-      rawResponse: `The agent couldn't generate a response due to an error: ${err.message}`,
-      compliantSections: [],
+      rawResponse: answer,
+      compliantSections: [],  // Could parse these out as well
       gaps: [],
-      suggestions: [],
-      documentChunks: []
-    }
+      suggestions: suggestions,
+      documentChunks: documentChunks.map(dc => ({
+        chunk_text: dc.chunk_text,
+        document_name: dc.document_name,
+        similarity: dc.similarity
+      }))
+    };
+  } catch (err) {
+    console.error("❌ Error generating compliance response:", err);
+    throw err;
   }
+}
+
+function logError(error: any, context: string) {
+  console.error(`❌ Error in ${context}:`, error);
+  
+  // In a production system, you might want to log this to a centralized error tracking system
+  // For now, we'll just log it to the console with a consistent format
+  const errorLog = {
+    timestamp: new Date().toISOString(),
+    context,
+    message: error.message || 'Unknown error',
+    stack: error.stack,
+  };
+  
+  console.error('ERROR_LOG:', JSON.stringify(errorLog));
 }
 
 serve(async (req) => {
@@ -239,7 +331,9 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
     const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
     
-    console.log("🔐 Supabase URL and service key present:", !!supabaseUrl, !!supabaseServiceRoleKey);
+    if (!supabaseUrl || !supabaseServiceRoleKey) {
+      throw new Error('Missing Supabase environment variables');
+    }
     
     // Initialize Supabase client with service role key instead of user auth
     const supabaseClient = createClient(supabaseUrl, supabaseServiceRoleKey);
@@ -250,13 +344,28 @@ serve(async (req) => {
     
     console.log("📩 Received request with query:", query);
     console.log("📄 Document ID:", document_id || "none");
-    console.log("👤 User ID:", user_id);
-
-    if (!query || !user_id) {
+    
+    if (!query) {
       return new Response(
-        JSON.stringify({ error: 'Query and user_id are required' }),
+        JSON.stringify({ error: true, message: 'Query is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+    
+    if (document_id) {
+      // Validate document status before proceeding
+      const validation = await validateDocument(supabaseClient, document_id, user_id);
+      
+      if (!validation.valid) {
+        return new Response(
+          JSON.stringify({ 
+            error: true, 
+            status: validation.status || 'error',
+            message: validation.message || 'Document validation failed' 
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     // Generate embedding for the query for similarity search
@@ -273,14 +382,37 @@ serve(async (req) => {
       );
       
       console.log(`📚 Found ${documentChunks.length} relevant document chunks`);
+      
+      if (document_id && documentChunks.length === 0) {
+        return new Response(
+          JSON.stringify({ 
+            error: true,
+            message: "No relevant context found in this document. Try rephrasing your question."
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     } else {
       console.warn("⚠️ Could not generate embedding for query");
     }
 
     // Generate the response using LLM
     console.log("🤖 Generating AI response...");
-    const aiResponse = await generateComplianceResponse(query, documentChunks);
-    console.log("✅ AI response generated, length:", aiResponse.rawResponse.length);
+    let aiResponse;
+    try {
+      aiResponse = await generateComplianceResponse(query, documentChunks);
+      console.log("✅ AI response generated, length:", aiResponse.rawResponse.length);
+    } catch (error) {
+      logError(error, 'generateComplianceResponse');
+      
+      return new Response(
+        JSON.stringify({ 
+          error: true,
+          message: "Failed to generate an AI response. Please try again later."
+        }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // Save the chat history if authenticated
     let chatId = null;
@@ -303,7 +435,7 @@ serve(async (req) => {
         console.error("❌ Error saving chat:", chatError);
       }
     } catch (error) {
-      console.error('❌ Error saving chat:', error);
+      logError(error, 'saveChat');
       // Continue even if chat saving fails
     }
 
@@ -324,9 +456,10 @@ serve(async (req) => {
       }
     );
   } catch (error) {
-    console.error('❌ Error processing request:', error);
+    logError(error, 'askAgent');
+    
     return new Response(
-      JSON.stringify({ error: 'Internal server error', details: error.message }),
+      JSON.stringify({ error: true, message: 'Internal server error', details: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

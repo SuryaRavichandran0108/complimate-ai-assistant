@@ -19,7 +19,8 @@ export const checkDocumentProcessingStatus = async (documentId: string) => {
       total: data.total || 0,
       embedded: data.embedded || 0,
       progress: data.progress || 0,
-      isComplete: data.isComplete || false
+      isComplete: data.isComplete || false,
+      status: data.status || 'processing'
     };
   } catch (error) {
     console.error('Error in checkDocumentProcessingStatus:', error);
@@ -27,12 +28,15 @@ export const checkDocumentProcessingStatus = async (documentId: string) => {
   }
 };
 
-export const triggerEmbeddingGeneration = async (documentId: string) => {
+export const triggerEmbeddingGeneration = async (documentId: string, retries = 3) => {
   try {
     // Trigger the embedding generation process
     const { data, error } = await supabase.functions
       .invoke('generate-embeddings', {
-        body: { document_id: documentId }
+        body: { 
+          document_id: documentId,
+          retries: retries 
+        }
       });
       
     if (error) {
@@ -54,9 +58,55 @@ export const triggerEmbeddingGeneration = async (documentId: string) => {
   }
 };
 
-// Add missing functions that are being imported by other components
+// Improved askAgent function with better error handling and document status checks
 export const askAgent = async (query: string, documentId?: string) => {
   try {
+    // If a document is specified, check its status first
+    if (documentId) {
+      try {
+        const { data: document, error: docError } = await supabase
+          .from('documents')
+          .select('status')
+          .eq('id', documentId)
+          .single();
+          
+        if (docError) {
+          console.error('Error checking document status:', docError);
+          throw new Error('Unable to check document status');
+        }
+        
+        if (document && document.status !== 'ready') {
+          return {
+            error: true,
+            message: document.status === 'processing' 
+              ? "⚠️ This document is still processing. Please wait until processing is complete before asking questions."
+              : "⚠️ This document encountered an error during processing. Please try re-uploading it.",
+            status: document.status
+          };
+        }
+        
+        // Check if there are any chunks for this document
+        const { count, error: countError } = await supabase
+          .from('document_chunks')
+          .select('*', { count: 'exact', head: true })
+          .eq('document_id', documentId)
+          .not('embedding_vector', 'is', null);
+          
+        if (countError) {
+          console.error('Error checking document chunks:', countError);
+        } else if (count === 0) {
+          return {
+            error: true,
+            message: "⚠️ No searchable content found in this document. It may still be processing or could not be embedded properly."
+          };
+        }
+      } catch (error) {
+        console.error('Error in document status check:', error);
+        // Continue with the query anyway, the edge function will handle this case
+      }
+    }
+    
+    // Invoke the edge function with the query and optional document ID
     const { data, error } = await supabase.functions.invoke('ask-agent', {
       body: { 
         query,
@@ -69,10 +119,22 @@ export const askAgent = async (query: string, documentId?: string) => {
       throw new Error(error.message || 'Failed to get a response from the agent.');
     }
     
+    // Check if the edge function returned an error message
+    if (data && data.error) {
+      return {
+        error: true,
+        message: data.message || 'There was an error processing your request.',
+        details: data.details
+      };
+    }
+    
     return data;
   } catch (error) {
     console.error('Error in askAgent:', error);
-    throw error;
+    return {
+      error: true,
+      message: error.message || 'Failed to get a response. Please try again later.'
+    };
   }
 };
 

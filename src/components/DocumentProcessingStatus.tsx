@@ -3,17 +3,16 @@ import React, { useEffect, useState } from 'react';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { RefreshCw, AlertTriangle } from 'lucide-react';
+import { RefreshCw, AlertTriangle, Clock, CheckCircle2 } from 'lucide-react';
 import { checkDocumentProcessingStatus, triggerEmbeddingGeneration } from '@/utils/chatService';
 import { useToast } from '@/hooks/use-toast';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface DocumentProcessingStatusProps {
   documentId: string;
   onComplete?: () => void;
 }
 
-export type ProcessingStatus = 'not_started' | 'processing' | 'complete' | 'error';
+export type ProcessingStatus = 'not_started' | 'processing' | 'ready' | 'error';
 
 const DocumentProcessingStatus: React.FC<DocumentProcessingStatusProps> = ({ 
   documentId,
@@ -37,7 +36,8 @@ const DocumentProcessingStatus: React.FC<DocumentProcessingStatusProps> = ({
       const processingStatus = await checkDocumentProcessingStatus(documentId);
       
       const newProcessingStatus: ProcessingStatus = 
-        processingStatus.isComplete ? 'complete' : 
+        processingStatus.status === 'ready' ? 'ready' : 
+        processingStatus.status === 'error' ? 'error' : 
         processingStatus.total > 0 ? 'processing' : 
         'not_started';
       
@@ -45,11 +45,11 @@ const DocumentProcessingStatus: React.FC<DocumentProcessingStatusProps> = ({
         ...processingStatus,
         isLoading: false,
         isProcessing: false,
-        hasError: false,
+        hasError: newProcessingStatus === 'error',
         processingStatus: newProcessingStatus
       });
       
-      if (processingStatus.isComplete && onComplete) {
+      if (newProcessingStatus === 'ready' && onComplete) {
         onComplete();
       }
     } catch (error) {
@@ -65,19 +65,23 @@ const DocumentProcessingStatus: React.FC<DocumentProcessingStatusProps> = ({
   };
   
   useEffect(() => {
+    let interval: NodeJS.Timeout;
+    
     if (documentId) {
       checkStatus();
       
       // Check status every 10 seconds if document is processing
-      const interval = setInterval(() => {
-        if (!status.isComplete && !status.hasError) {
+      interval = setInterval(() => {
+        if (status.processingStatus === 'processing' || status.processingStatus === 'not_started') {
           checkStatus();
         }
       }, 10000);
-      
-      return () => clearInterval(interval);
     }
-  }, [documentId]);
+    
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [documentId, status.processingStatus]);
   
   const handleTriggerEmbedding = async () => {
     setStatus(prev => ({ ...prev, isProcessing: true }));
@@ -120,10 +124,10 @@ const DocumentProcessingStatus: React.FC<DocumentProcessingStatusProps> = ({
   
   const renderStatus = () => {
     switch (status.processingStatus) {
-      case 'complete':
+      case 'ready':
         return (
-          <Badge className="bg-green-500 hover:bg-green-600 transition-colors">
-            Ready for Analysis
+          <Badge className="bg-green-500 hover:bg-green-600 transition-colors flex items-center gap-1">
+            <CheckCircle2 size={12} /> Ready for Analysis
           </Badge>
         );
         
@@ -131,8 +135,8 @@ const DocumentProcessingStatus: React.FC<DocumentProcessingStatusProps> = ({
         return (
           <div className="space-y-1 min-h-[40px]">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-xs text-muted-foreground">
-                Processing document ({status.embedded}/{status.total} chunks)
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <Clock size={12} /> Processing document ({status.embedded}/{status.total} chunks)
               </span>
               <Button 
                 size="icon" 
@@ -173,7 +177,9 @@ const DocumentProcessingStatus: React.FC<DocumentProcessingStatusProps> = ({
       default:
         return (
           <div>
-            <Badge variant="outline">Not yet processed</Badge>
+            <Badge variant="outline" className="flex items-center gap-1">
+              <Clock size={12} /> Not yet processed
+            </Badge>
             <Button 
               size="sm"
               variant="outline"

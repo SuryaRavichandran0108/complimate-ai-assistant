@@ -3,11 +3,11 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Send, Loader, ChevronDown, ChevronUp, FileText } from 'lucide-react';
+import { Send, Loader, ChevronDown, ChevronUp, FileText, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { askAgent } from '@/utils/chatService';
-import { saveTaskFromSuggestion } from '@/utils/chatService';
+import { askAgent, saveTaskFromSuggestion } from '@/utils/chatService';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface DocumentContext {
   chunk_text: string;
@@ -16,7 +16,7 @@ interface DocumentContext {
 }
 
 interface ChatMessage {
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'system';
   content: string;
   id?: string;
   compliantSections?: string[];
@@ -62,22 +62,53 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     setIsLoading(true);
     
     try {
+      // Check if the document is ready for querying
+      if (documentContext === 'document' && activeDocument) {
+        if (activeDocument.status === 'processing') {
+          const systemMessage: ChatMessage = {
+            role: 'system',
+            content: "⚠️ This document is still processing. Please wait until processing is complete before asking questions.",
+          };
+          setMessages((prev) => [...prev, systemMessage]);
+          setIsLoading(false);
+          return;
+        } else if (activeDocument.status === 'error') {
+          const systemMessage: ChatMessage = {
+            role: 'system',
+            content: "⚠️ This document encountered an error during processing. Please try re-uploading it.",
+          };
+          setMessages((prev) => [...prev, systemMessage]);
+          setIsLoading(false);
+          return;
+        }
+      }
+      
       const response = await askAgent(
         input, 
         documentContext === 'document' && activeDocument ? activeDocument.id : undefined
       );
       
-      const assistantMessage: ChatMessage = {
-        role: 'assistant',
-        content: response.response,
-        id: response.id,
-        compliantSections: response.compliantSections,
-        gaps: response.gaps,
-        suggestions: response.suggestions,
-        documentContext: response.documentContext,
-      };
-      
-      setMessages((prev) => [...prev, assistantMessage]);
+      if (response.error) {
+        // Handle error responses
+        const errorMessage: ChatMessage = {
+          role: 'system',
+          content: response.message || "I'm sorry, I couldn't process your request. Please try again later.",
+        };
+        setMessages((prev) => [...prev, errorMessage]);
+      } else {
+        // Process successful response
+        const assistantMessage: ChatMessage = {
+          role: 'assistant',
+          content: response.response || response.rawResponse,
+          id: response.id,
+          compliantSections: response.compliantSections,
+          gaps: response.gaps,
+          suggestions: response.suggestions,
+          documentContext: response.documentContext,
+        };
+        
+        setMessages((prev) => [...prev, assistantMessage]);
+      }
       
       if (onChatComplete) {
         onChatComplete();
@@ -94,7 +125,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       setMessages((prev) => [
         ...prev,
         {
-          role: 'assistant',
+          role: 'system',
           content: "I'm sorry, I couldn't process your request. Please try again later.",
         },
       ]);
@@ -153,19 +184,47 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       setExpandedContext(id);
     }
   };
+  
+  // Display warning if document is processing
+  const showDocumentProcessingWarning = documentContext === 'document' && 
+    activeDocument && 
+    activeDocument.status === 'processing';
+    
+  // Display error if document has errored
+  const showDocumentErrorWarning = documentContext === 'document' && 
+    activeDocument && 
+    activeDocument.status === 'error';
 
   return (
     <Card className="border-complimate-dark-purple/30">
       <CardHeader className="pb-3">
         <CardTitle className="text-lg flex items-center gap-2">
-          <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></div>
+          <div className={`h-2 w-2 rounded-full ${activeDocument?.status === 'ready' ? 'bg-green-500' : activeDocument?.status === 'error' ? 'bg-red-500' : 'bg-yellow-500'} ${activeDocument?.status === 'processing' ? 'animate-pulse' : ''}`}></div>
           {documentContext === 'document' && activeDocument
             ? `Chat about ${activeDocument.name}`
             : 'CompliMate Assistant'}
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="flex flex-col space-y-4 mb-4">
+        {showDocumentProcessingWarning && (
+          <Alert variant="warning" className="mb-4 bg-yellow-500/10 border-yellow-500/30">
+            <AlertTriangle className="h-4 w-4 text-yellow-500" />
+            <AlertDescription className="text-sm">
+              This document is still being processed. You can ask questions when processing is complete.
+            </AlertDescription>
+          </Alert>
+        )}
+        
+        {showDocumentErrorWarning && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription className="text-sm">
+              There was an error processing this document. Please try re-uploading it.
+            </AlertDescription>
+          </Alert>
+        )}
+      
+        <div className="flex flex-col space-y-4 mb-4 max-h-[500px] overflow-y-auto scrollbar-thin">
           {messages.length === 0 ? (
             <div className="text-center py-12">
               <p className="text-muted-foreground text-sm">
@@ -177,14 +236,16 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
               <div
                 key={index}
                 className={`flex flex-col ${
-                  message.role === 'assistant' ? 'items-start' : 'items-end'
+                  message.role === 'user' ? 'items-end' : 'items-start'
                 }`}
               >
                 <div
                   className={`rounded-lg px-4 py-2 max-w-[85%] ${
-                    message.role === 'assistant'
-                      ? 'bg-secondary text-secondary-foreground'
-                      : 'bg-complimate-purple text-white'
+                    message.role === 'user'
+                      ? 'bg-complimate-purple text-white'
+                      : message.role === 'system'
+                      ? 'bg-yellow-500/10 border border-yellow-500/30 text-foreground'
+                      : 'bg-secondary text-secondary-foreground'
                   }`}
                 >
                   {message.content.split('\n').map((line, i) => (
@@ -279,11 +340,12 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
             value={input}
             onChange={handleInputChange}
             className="flex-1"
+            disabled={showDocumentProcessingWarning || showDocumentErrorWarning}
           />
           <Button
             type="submit"
             size="icon"
-            disabled={!input.trim() || isLoading}
+            disabled={!input.trim() || isLoading || showDocumentProcessingWarning || showDocumentErrorWarning}
           >
             <Send className="h-4 w-4" />
           </Button>

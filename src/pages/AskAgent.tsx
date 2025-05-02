@@ -1,13 +1,15 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useCallback } from 'react';
 import Layout from '../components/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Brain, MessageSquare, History, FileText } from 'lucide-react';
+import { Brain, MessageSquare, History, FileText, AlertCircle } from 'lucide-react';
 import ChatInterface from '../components/ChatInterface';
 import { useAuth } from '@/contexts/AuthContext';
 import { getUserDocuments } from '@/utils/documentUtils';
 import { getUserChatHistory } from '@/utils/chatService';
+import { Badge } from '@/components/ui/badge';
 
 const AskAgent: React.FC = () => {
   const [activeDocument, setActiveDocument] = useState<any | null>(null);
@@ -32,6 +34,14 @@ const AskAgent: React.FC = () => {
     // Get chat history
     const history = await getUserChatHistory(user.id);
     setChatHistory(history || []);
+    
+    // Check if activeDocument needs to be updated with fresh data
+    if (activeDocument) {
+      const updatedDoc = docs?.find(doc => doc.id === activeDocument.id);
+      if (updatedDoc) {
+        setActiveDocument(updatedDoc);
+      }
+    }
   };
   
   const handleDocumentSelect = (doc: any) => {
@@ -42,6 +52,19 @@ const AskAgent: React.FC = () => {
   const clearActiveDocument = () => {
     setActiveDocument(null);
     setChatContext('general');
+  };
+  
+  const getStatusBadge = (status: string) => {
+    switch(status) {
+      case 'ready':
+        return <Badge className="bg-green-500">Ready</Badge>;
+      case 'processing':
+        return <Badge variant="outline" className="animate-pulse">Processing</Badge>;
+      case 'error':
+        return <Badge variant="destructive">Error</Badge>;
+      default:
+        return null;
+    }
   };
 
   return (
@@ -98,10 +121,14 @@ const AskAgent: React.FC = () => {
                               variant="ghost"
                               className="w-full justify-start text-left p-2 h-auto"
                               onClick={() => handleDocumentSelect(doc)}
+                              disabled={doc.status === 'processing'}
                             >
-                              <div className="flex items-center gap-2">
-                                <FileText size={14} className="shrink-0" />
-                                <span className="truncate">{doc.name}</span>
+                              <div className="flex items-center justify-between w-full">
+                                <div className="flex items-center gap-2">
+                                  <FileText size={14} className="shrink-0" />
+                                  <span className="truncate">{doc.name}</span>
+                                </div>
+                                {getStatusBadge(doc.status)}
                               </div>
                             </Button>
                           ))}

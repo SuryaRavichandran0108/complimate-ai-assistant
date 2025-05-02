@@ -13,17 +13,21 @@ interface DocumentUploadProps {
   onUploadComplete?: (documentId: string) => void;
 }
 
+type UploadState = 'idle' | 'uploading' | 'processing' | 'success' | 'error';
+
 const DocumentUpload: React.FC<DocumentUploadProps> = ({ onUploadComplete }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [uploadState, setUploadState] = useState<{
-    isUploading: boolean;
+    state: UploadState;
     progress: number;
     error: string | null;
+    documentId: string | null;
   }>({
-    isUploading: false,
+    state: 'idle',
     progress: 0,
-    error: null
+    error: null,
+    documentId: null
   });
   const { user } = useAuth();
   const { toast } = useToast();
@@ -75,12 +79,19 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({ onUploadComplete }) => 
       
       if (fileSize <= 10 * 1024 * 1024) { // 10MB max
         setFile(file);
-        setUploadState(prev => ({ ...prev, error: null }));
+        setUploadState({
+          state: 'idle',
+          progress: 0,
+          error: null,
+          documentId: null
+        });
       } else {
-        setUploadState(prev => ({ 
-          ...prev, 
-          error: "File too large. Please upload a file smaller than 10MB."
-        }));
+        setUploadState({ 
+          state: 'error',
+          progress: 0,
+          error: "File too large. Please upload a file smaller than 10MB.",
+          documentId: null
+        });
         toast({
           title: "File too large",
           description: "Please upload a file smaller than 10MB",
@@ -88,10 +99,12 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({ onUploadComplete }) => 
         });
       }
     } else {
-      setUploadState(prev => ({ 
-        ...prev, 
-        error: "Invalid file type. Please upload a PDF, DOCX, or TXT file."
-      }));
+      setUploadState({ 
+        state: 'error',
+        progress: 0,
+        error: "Invalid file type. Please upload a PDF, DOCX, or TXT file.",
+        documentId: null
+      });
       toast({
         title: "Invalid file type",
         description: "Please upload a PDF, DOCX, or TXT file",
@@ -103,9 +116,10 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({ onUploadComplete }) => 
   const handleRemoveFile = () => {
     setFile(null);
     setUploadState({
-      isUploading: false,
+      state: 'idle',
       progress: 0,
-      error: null
+      error: null,
+      documentId: null
     });
   };
 
@@ -128,9 +142,10 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({ onUploadComplete }) => 
     if (!file || !user) return;
     
     setUploadState({
-      isUploading: true,
+      state: 'uploading',
       progress: 0,
-      error: null
+      error: null,
+      documentId: null
     });
     
     // Start progress simulation
@@ -142,21 +157,31 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({ onUploadComplete }) => 
       // Stop progress simulation
       stopProgress();
       
-      if (result.success) {
-        setUploadState(prev => ({
-          ...prev,
-          isUploading: false,
-          progress: 100
-        }));
+      if (result.success && result.document) {
+        setUploadState({
+          state: 'success',
+          progress: 100,
+          error: null,
+          documentId: result.document.id
+        });
         
         toast({
           title: "✅ Document successfully uploaded",
           description: "Processing in background...",
         });
         
-        setFile(null);
+        // Clear file after a short delay to show success state
+        setTimeout(() => {
+          setFile(null);
+          setUploadState({
+            state: 'idle',
+            progress: 0,
+            error: null,
+            documentId: null
+          });
+        }, 3000);
         
-        if (onUploadComplete && result.document) {
+        if (onUploadComplete) {
           onUploadComplete(result.document.id);
         }
       } else {
@@ -166,12 +191,12 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({ onUploadComplete }) => 
       console.error('Error uploading document:', error);
       stopProgress();
       
-      setUploadState(prev => ({
-        ...prev,
-        isUploading: false,
+      setUploadState({
+        state: 'error',
         progress: 0,
-        error: "Upload failed. Please try again."
-      }));
+        error: "Upload failed. Please try again.",
+        documentId: null
+      });
       
       toast({
         title: "Upload failed",
@@ -222,7 +247,7 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({ onUploadComplete }) => 
             </div>
             <p className="text-xs text-gray-500">or drag and drop</p>
           </>
-        ) : uploadState.isUploading ? (
+        ) : uploadState.state === 'uploading' ? (
           <>
             <div className="p-3 bg-complimate-soft-gray rounded-full animate-pulse">
               <Upload className="h-6 w-6 text-complimate-purple" />
@@ -234,6 +259,22 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({ onUploadComplete }) => 
                 {Math.round(uploadState.progress)}%
               </p>
             </div>
+          </>
+        ) : uploadState.state === 'success' ? (
+          <>
+            <div className="p-3 bg-green-100 rounded-full">
+              <Check className="h-6 w-6 text-green-500" />
+            </div>
+            <p className="text-sm font-medium text-gray-900">Successfully uploaded {file.name}</p>
+            <p className="text-xs text-gray-500">Your document will be processed in the background.</p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRemoveFile}
+              className="mt-2"
+            >
+              Upload another file
+            </Button>
           </>
         ) : (
           <>
@@ -254,7 +295,7 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({ onUploadComplete }) => 
               <Button 
                 size="sm" 
                 onClick={handleUpload} 
-                disabled={uploadState.isUploading} 
+                disabled={uploadState.state === 'uploading'} 
                 className="flex items-center gap-1"
               >
                 <Upload size={14} /> Upload

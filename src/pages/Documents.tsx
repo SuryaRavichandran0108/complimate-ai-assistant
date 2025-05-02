@@ -13,6 +13,17 @@ import DocumentUpload from '@/components/DocumentUpload';
 import { useToast } from '@/hooks/use-toast';
 import DocumentProcessingStatus from '@/components/DocumentProcessingStatus';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Badge } from '@/components/ui/badge';
 
 const Documents: React.FC = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -20,6 +31,8 @@ const Documents: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [documentToDelete, setDocumentToDelete] = useState<{id: string, storagePath: string} | null>(null);
   const { user } = useAuth();
   const { toast } = useToast();
   
@@ -50,25 +63,39 @@ const Documents: React.FC = () => {
     loadDocuments();
   }, [loadDocuments, refreshTrigger]);
   
-  const handleDeleteDocument = async (documentId: string, storagePath: string) => {
-    if (!user) return;
+  const confirmDeleteDocument = (documentId: string, storagePath: string) => {
+    setDocumentToDelete({ id: documentId, storagePath });
+    setDeleteDialogOpen(true);
+  };
+  
+  const handleDeleteDocument = async () => {
+    if (!documentToDelete || !user) {
+      setDeleteDialogOpen(false);
+      return;
+    }
+    
+    const { id, storagePath } = documentToDelete;
     
     try {
-      const result = await deleteDocument(documentId, storagePath);
+      // Optimistic UI update
+      setDocuments(documents.filter(doc => doc.id !== id));
+      setDeleteDialogOpen(false);
+      
+      const result = await deleteDocument(id, storagePath);
       
       if (result.success) {
-        // Update UI optimistically
-        setDocuments(documents.filter(doc => doc.id !== documentId));
-        
         toast({
           title: "Document deleted",
-          description: "The document has been successfully deleted.",
+          description: "The document and associated data has been successfully deleted.",
         });
       } else {
         throw new Error(result.error || 'Delete failed');
       }
     } catch (error) {
       console.error('Error deleting document:', error);
+      
+      // Revert optimistic update
+      loadDocuments();
       
       toast({
         title: "Delete failed",
@@ -122,6 +149,19 @@ const Documents: React.FC = () => {
     }
   };
   
+  const getStatusBadge = (status: string) => {
+    switch(status) {
+      case 'ready':
+        return <Badge className="bg-green-500">Ready</Badge>;
+      case 'processing':
+        return <Badge variant="outline" className="animate-pulse">Processing</Badge>;
+      case 'error':
+        return <Badge variant="destructive">Error</Badge>;
+      default:
+        return <Badge variant="outline">Pending</Badge>;
+    }
+  };
+  
   const filteredDocuments = searchQuery 
     ? documents.filter(doc => 
         doc.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -140,17 +180,20 @@ const Documents: React.FC = () => {
                 {document.type.includes('pdf') ? 'PDF' : 
                  document.type.includes('word') ? 'DOCX' : 'TXT'} • {Math.round(document.size / 1024)} KB
               </p>
-              <DocumentProcessingStatus 
-                documentId={document.id} 
-                onComplete={handleProcessingComplete} 
-              />
+              <div className="mt-2">
+                {document.status ? getStatusBadge(document.status) : 
+                 <DocumentProcessingStatus 
+                   documentId={document.id} 
+                   onComplete={handleProcessingComplete} 
+                 />}
+              </div>
             </div>
           </div>
           <Button 
             variant="ghost" 
             size="icon" 
             className="rounded-full hover:text-red-500"
-            onClick={() => handleDeleteDocument(document.id, document.storage_path)}
+            onClick={() => confirmDeleteDocument(document.id, document.storage_path)}
           >
             <Trash2 size={16} />
           </Button>
@@ -185,10 +228,13 @@ const Documents: React.FC = () => {
             {document.type.includes('pdf') ? 'PDF' : 
              document.type.includes('word') ? 'DOCX' : 'TXT'} • {Math.round(document.size / 1024)} KB
           </div>
-          <DocumentProcessingStatus 
-            documentId={document.id}
-            onComplete={handleProcessingComplete}
-          />
+          <div className="mt-1">
+            {document.status ? getStatusBadge(document.status) : 
+             <DocumentProcessingStatus 
+               documentId={document.id}
+               onComplete={handleProcessingComplete}
+             />}
+          </div>
         </div>
       </div>
       
@@ -209,7 +255,7 @@ const Documents: React.FC = () => {
             size="sm"
             variant="ghost"
             className="text-red-500"
-            onClick={() => handleDeleteDocument(document.id, document.storage_path)}
+            onClick={() => confirmDeleteDocument(document.id, document.storage_path)}
           >
             <Trash2 size={16} />
           </Button>
@@ -269,8 +315,9 @@ const Documents: React.FC = () => {
                       size="sm"
                       onClick={() => setRefreshTrigger(prev => prev + 1)}
                       className="ml-2"
+                      disabled={isLoading}
                     >
-                      <RefreshCw size={16} className="mr-1" /> Refresh
+                      <RefreshCw size={16} className={`mr-1 ${isLoading ? 'animate-spin' : ''}`} /> Refresh
                     </Button>
                   </div>
                 </CardContent>
@@ -316,6 +363,24 @@ const Documents: React.FC = () => {
                 </div>
               )
             )}
+            
+            {/* Delete confirmation dialog */}
+            <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Are you sure you want to delete this document?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This action cannot be undone. The document and all associated data will be permanently deleted.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDeleteDocument} className="bg-red-500 hover:bg-red-600">
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </>
         ) : (
           <Card className="p-8 text-center">
