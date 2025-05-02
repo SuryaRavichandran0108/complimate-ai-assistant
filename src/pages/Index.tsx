@@ -144,16 +144,22 @@ const Index: React.FC = () => {
           </Card>
         )}
         
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main content area - Removed Quick Links */}
-          <div className="lg:col-span-2">
-            {/* This is where Quick Links used to be */}
+        {/* Agent Suggestions and Compliance Tasks in responsive layout */}
+        <div className="flex flex-col md:flex-row gap-4 px-6 md:px-12 mt-6">
+          {/* Agent Suggestions */}
+          <div className="w-full md:w-1/2 animate-fade-in">
+            <div className="bg-muted/30 rounded-2xl shadow-md p-4 w-full h-full">
+              <h2 className="text-xl font-semibold text-primary mb-4">Agent Suggestions</h2>
+              <AgentSuggestions />
+            </div>
           </div>
           
-          {/* Sidebar with agent suggestions and task preview */}
-          <div className="lg:col-span-1">
-            <AgentSuggestions />
-            <TaskPreview />
+          {/* Compliance Tasks */}
+          <div className="w-full md:w-1/2 animate-fade-in" style={{animationDelay: "100ms"}}>
+            <div className="bg-muted/30 rounded-2xl shadow-md p-4 w-full h-full">
+              <h2 className="text-xl font-semibold text-primary mb-4">Compliance Tasks</h2>
+              <TaskPreview />
+            </div>
           </div>
         </div>
       </div>
