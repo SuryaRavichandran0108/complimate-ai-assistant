@@ -89,6 +89,7 @@ export type Database = {
           id: string
           name: string
           size: number
+          status: string
           storage_path: string
           type: string
           updated_at: string
@@ -100,6 +101,7 @@ export type Database = {
           id?: string
           name: string
           size: number
+          status?: string
           storage_path: string
           type: string
           updated_at?: string
@@ -111,6 +113,7 @@ export type Database = {
           id?: string
           name?: string
           size?: number
+          status?: string
           storage_path?: string
           type?: string
           updated_at?: string

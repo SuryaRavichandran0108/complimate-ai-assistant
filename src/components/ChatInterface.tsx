@@ -207,7 +207,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       </CardHeader>
       <CardContent>
         {showDocumentProcessingWarning && (
-          <Alert variant="warning" className="mb-4 bg-yellow-500/10 border-yellow-500/30">
+          <Alert variant="default" className="mb-4 bg-yellow-500/10 border-yellow-500/30">
             <AlertTriangle className="h-4 w-4 text-yellow-500" />
             <AlertDescription className="text-sm">
               This document is still being processed. You can ask questions when processing is complete.
