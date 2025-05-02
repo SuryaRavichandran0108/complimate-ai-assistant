@@ -6,7 +6,7 @@ import TaskPreview from '../components/TaskPreview';
 import AgentSuggestions from '../components/AgentSuggestions';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Shield, ArrowRight, FileText, MessageSquare, LogIn } from 'lucide-react';
+import { Shield, ArrowRight, FileText, MessageSquare } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
@@ -147,76 +147,6 @@ const Index: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main content area */}
           <div className="lg:col-span-2">
-            {!activeDocument && !loading && (
-              <>
-                {user ? (
-                  documents.length > 0 ? (
-                    <Card className="mb-6">
-                      <CardContent className="p-6">
-                        <div className="space-y-4">
-                          <h3 className="text-lg font-medium">Your Documents</h3>
-                          <div className="space-y-2">
-                            {documents.slice(0, 3).map((doc) => (
-                              <div 
-                                key={doc.id} 
-                                className="p-3 border rounded-lg flex items-center justify-between cursor-pointer hover:border-complimate-purple/50 transition-colors"
-                                onClick={() => handleDocumentSelect(doc)}
-                              >
-                                <div className="flex items-center">
-                                  <FileText className="mr-2 text-complimate-purple" size={18} />
-                                  <div>
-                                    <p className="font-medium">{doc.name}</p>
-                                    <p className="text-xs text-muted-foreground">
-                                      {new Date(doc.created_at).toLocaleDateString()}
-                                    </p>
-                                  </div>
-                                </div>
-                                <ArrowRight size={16} className="text-muted-foreground" />
-                              </div>
-                            ))}
-                          </div>
-                          
-                          {documents.length > 3 && (
-                            <Button 
-                              variant="link" 
-                              className="w-full" 
-                              onClick={() => handleNavigation('/documents')}
-                            >
-                              View all documents ({documents.length})
-                            </Button>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ) : (
-                    <Card className="mb-6">
-                      <CardContent className="p-6">
-                        <div className="text-center py-6">
-                          <FileText size={36} className="mb-3 mx-auto text-muted-foreground" />
-                          <h3 className="text-lg font-medium mb-2">No documents yet</h3>
-                          <p className="text-muted-foreground mb-4">Upload your first document to get started</p>
-                          <Button onClick={() => handleNavigation('/documents')} className="flex items-center gap-2">
-                            <FileText size={16} /> Upload Document
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )
-                ) : (
-                  <Card className="mb-6">
-                    <CardContent className="p-6">
-                      <div className="text-center py-6">
-                        <LogIn size={36} className="mb-3 mx-auto text-muted-foreground" />
-                        <h3 className="text-lg font-medium mb-2">Sign in to get started</h3>
-                        <p className="text-muted-foreground mb-4">Access all features and secure your compliance journey</p>
-                        <Button onClick={() => navigate('/auth')}>Sign In</Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-              </>
-            )}
-            
             {/* Quick Links section */}
             <Card className="mb-6">
               <CardContent className="p-6">
