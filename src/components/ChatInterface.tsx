@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Send, Loader, AlertTriangle } from 'lucide-react';
+import { Send, Loader } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { askAgent } from '@/utils/chatService';
@@ -43,15 +43,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     e.preventDefault();
     
     if (!input.trim() || isLoading) return;
-    
-    if (!user) {
-      toast({
-        title: "Authentication required",
-        description: "Please sign in to use the chat feature.",
-        variant: "destructive",
-      });
-      return;
-    }
     
     const userMessage: ChatMessage = {
       role: 'user',
@@ -104,7 +95,14 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   };
 
   const handleSaveTask = async (suggestion: string) => {
-    if (!user) return;
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "Please sign in to save tasks.",
+        variant: "destructive",
+      });
+      return;
+    }
     
     try {
       const result = await saveTaskFromSuggestion(
@@ -212,9 +210,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         </div>
 
         {!user && (
-          <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-md flex items-center gap-2">
-            <AlertTriangle className="text-yellow-500" size={18} />
-            <p className="text-sm text-foreground">Please sign in to use the chat feature.</p>
+          <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-md flex items-center gap-2">
+            <p className="text-sm text-foreground">You can use the chat without signing in, but some features like saving tasks will require authentication.</p>
           </div>
         )}
         
@@ -228,7 +225,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
           <Button
             type="submit"
             size="icon"
-            disabled={!input.trim() || isLoading || !user}
+            disabled={!input.trim() || isLoading}
           >
             <Send className="h-4 w-4" />
           </Button>

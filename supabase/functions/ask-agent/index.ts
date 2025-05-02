@@ -74,8 +74,6 @@ Use plain language. Reference relevant U.S. laws or common best practices if pos
   }
 }
 
-
-
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -83,15 +81,11 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        global: {
-          headers: { Authorization: req.headers.get('Authorization') ?? '' },
-        },
-      }
-    );
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    
+    // Initialize Supabase client with service role key instead of user auth
+    const supabaseClient = createClient(supabaseUrl, supabaseServiceRoleKey);
 
     // Get request body
     const requestData: RequestBody = await req.json();

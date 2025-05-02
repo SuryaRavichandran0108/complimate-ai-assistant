@@ -22,16 +22,21 @@ export interface ChatHistoryItem {
 
 export const askAgent = async (query: string, documentId?: string) => {
   try {
+    // We still need a user ID for database relations, but can use a dummy one for testing
+    // or get the actual user ID if authenticated
+    let userId = 'test-user-id';
+    
+    // Try to get the actual user ID if available
     const { data: userData } = await supabase.auth.getUser();
-    if (!userData.user) {
-      throw new Error('User not authenticated');
+    if (userData?.user) {
+      userId = userData.user.id;
     }
 
     const { data, error } = await supabase.functions.invoke('ask-agent', {
       body: { 
         query,
         document_id: documentId,
-        user_id: userData.user.id
+        user_id: userId
       },
     });
 
