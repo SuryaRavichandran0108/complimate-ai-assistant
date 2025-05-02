@@ -33,32 +33,47 @@ Use plain language. Reference relevant U.S. laws or common best practices if pos
 
   const openaiKey = Deno.env.get('OPENAI_API_KEY')
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${openaiKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: 'gpt-4',
-      messages: [
-        { role: 'system', content: 'You are a helpful compliance assistant for SMBs.' },
-        { role: 'user', content: prompt }
-      ],
-      temperature: 0.2
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openaiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'gpt-4',
+        messages: [
+          { role: 'system', content: 'You are a helpful compliance assistant for SMBs.' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.2
+      })
     })
-  })
 
-  const data = await response.json()
-  const answer = data.choices?.[0]?.message?.content ?? "The agent couldn't generate a response."
+    const raw = await response.text()
+    console.log("OpenAI raw response:", raw)
 
-  return {
-    rawResponse: answer,
-    compliantSections: [],  // You can optionally parse these from the LLM response later
-    gaps: [],
-    suggestions: []
+    const data = JSON.parse(raw)
+    const answer = data.choices?.[0]?.message?.content ?? "The agent couldn't generate a response."
+
+    return {
+      rawResponse: answer,
+      compliantSections: [],  // You can optionally parse these later
+      gaps: [],
+      suggestions: []
+    }
+
+  } catch (err) {
+    console.error("Error calling OpenAI:", err)
+    return {
+      rawResponse: "The agent couldn't generate a response due to an internal error.",
+      compliantSections: [],
+      gaps: [],
+      suggestions: []
+    }
   }
 }
+
 
 
 serve(async (req) => {
