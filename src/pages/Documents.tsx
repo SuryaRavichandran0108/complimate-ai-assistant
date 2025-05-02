@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, FileText, Upload, FolderOpen, FileUp, Clock, Star, Filter, Grid, List, Plus, Trash2 } from 'lucide-react';
+import { Search, FileText, Upload, FolderOpen, FileUp, Clock, Star, Filter, Grid, List, Plus, Trash2, RefreshCw } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useAuth } from '@/contexts/AuthContext';
 import { getUserDocuments, deleteDocument, getDocumentUrl } from '@/utils/documentUtils';
