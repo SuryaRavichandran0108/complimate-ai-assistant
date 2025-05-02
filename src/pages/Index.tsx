@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
@@ -186,7 +185,7 @@ const Index: React.FC = () => {
                         <TabsTrigger value="check">Quick Check</TabsTrigger>
                       </TabsList>
                       
-                      <TabsContent value="upload" className="mt-4">
+                      <TabsContent value="upload" className="mt-4 pointer-events-auto">
                         <DocumentUpload />
                       </TabsContent>
                       <TabsContent value="policy" className="mt-4">
@@ -263,7 +262,7 @@ const Index: React.FC = () => {
                       <TabsTrigger value="check">Quick Check</TabsTrigger>
                     </TabsList>
                     
-                    <TabsContent value="upload" className="mt-4">
+                    <TabsContent value="upload" className="mt-4 pointer-events-auto">
                       <UploadCard onFileUpload={() => navigate('/auth')} />
                     </TabsContent>
                     <TabsContent value="policy" className="mt-4">
@@ -335,11 +334,13 @@ const Index: React.FC = () => {
               </>
             )}
             
-            <ChatInterface 
-              documentContext={chatContext} 
-              activeDocument={activeDocument} 
-              onChatComplete={loadUserData}
-            />
+            <div className="pointer-events-auto">
+              <ChatInterface 
+                documentContext={chatContext} 
+                activeDocument={activeDocument} 
+                onChatComplete={loadUserData}
+              />
+            </div>
           </div>
           <div className="lg:col-span-1">
             <AgentSuggestions />
