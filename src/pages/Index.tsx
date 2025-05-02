@@ -145,63 +145,9 @@ const Index: React.FC = () => {
         )}
         
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main content area */}
+          {/* Main content area - Removed Quick Links */}
           <div className="lg:col-span-2">
-            {/* Quick Links section */}
-            <Card className="mb-6">
-              <CardContent className="p-6">
-                <h3 className="text-lg font-medium mb-3">Quick Links</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Button 
-                    variant="outline" 
-                    className="justify-start h-auto py-2.5" 
-                    onClick={() => handleNavigation('/ask-agent')}
-                  >
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full bg-complimate-soft-gray flex items-center justify-center">
-                        <MessageSquare className="h-4 w-4 text-complimate-purple" />
-                      </div>
-                      <div className="text-left">
-                        <p className="font-medium">Ask CompliMate</p>
-                        <p className="text-xs text-muted-foreground">Get answers to compliance questions</p>
-                      </div>
-                    </div>
-                  </Button>
-                  
-                  <Button 
-                    variant="outline" 
-                    className="justify-start h-auto py-2.5" 
-                    onClick={() => handleNavigation('/documents')}
-                  >
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full bg-complimate-soft-gray flex items-center justify-center">
-                        <FileText className="h-4 w-4 text-complimate-purple" />
-                      </div>
-                      <div className="text-left">
-                        <p className="font-medium">Documents</p>
-                        <p className="text-xs text-muted-foreground">Upload and manage your files</p>
-                      </div>
-                    </div>
-                  </Button>
-                  
-                  <Button 
-                    variant="outline" 
-                    className="justify-start h-auto py-2.5" 
-                    onClick={() => handleNavigation('/tasks')}
-                  >
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full bg-complimate-soft-gray flex items-center justify-center">
-                        <FileText className="h-4 w-4 text-complimate-purple" />
-                      </div>
-                      <div className="text-left">
-                        <p className="font-medium">Tasks</p>
-                        <p className="text-xs text-muted-foreground">Track compliance tasks</p>
-                      </div>
-                    </div>
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+            {/* This is where Quick Links used to be */}
           </div>
           
           {/* Sidebar with agent suggestions and task preview */}
