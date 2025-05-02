@@ -133,7 +133,7 @@ const DocumentUpload: React.FC = () => {
                   </p>
                 </div>
                 <div className="mt-2">
-                  <label htmlFor="file-upload" className="cursor-pointer bg-complimate-purple hover:bg-complimate-purple/90 text-white py-2 px-4 rounded-md text-sm font-medium transition-colors duration-200">
+                  <label htmlFor="file-upload" className="inline-block cursor-pointer bg-complimate-purple hover:bg-complimate-purple/90 text-white py-2 px-4 rounded-md text-sm font-medium transition-colors duration-200">
                     Select a file
                     <input id="file-upload" name="file-upload" type="file" accept=".pdf,.docx" className="sr-only" onChange={handleFileChange} />
                   </label>
