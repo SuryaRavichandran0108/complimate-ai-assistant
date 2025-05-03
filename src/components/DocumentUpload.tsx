@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Upload, X, FileText, AlertTriangle, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -294,7 +295,7 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({ onUploadComplete }) => 
               <Button 
                 size="sm" 
                 onClick={handleUpload} 
-                disabled={uploadState.state === 'uploading'} 
+                disabled={uploadState.state === 'uploading' || uploadState.state === 'processing'} 
                 className="flex items-center gap-1"
               >
                 <Upload size={14} /> Upload
