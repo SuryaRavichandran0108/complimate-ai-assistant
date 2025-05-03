@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 
 // Add these functions to support document processing status and embedding generation
@@ -141,16 +140,18 @@ export const askAgent = async (query: string, documentId?: string) => {
 export const saveTaskFromSuggestion = async (
   userId: string, 
   documentId: string | null, 
-  suggestion: string
+  suggestion: string,
+  source: string = 'agent_suggestion'
 ) => {
   try {
     const { data, error } = await supabase
-      .from('tasks')
+      .from('compliance_tasks')
       .insert({
-        user_id: userId,
-        title: suggestion,
-        document_id: documentId,
-        category: documentId ? 'document' : 'general',
+        description: suggestion,
+        status: 'open',
+        created_by: userId,
+        source_type: source,
+        related_doc_id: documentId,
       })
       .select()
       .single();
@@ -165,6 +166,31 @@ export const saveTaskFromSuggestion = async (
     console.error('Error in saveTaskFromSuggestion:', error);
     return { success: false, error };
   }
+};
+
+// Function to extract suggestions from AI response
+export const extractSuggestions = (text: string): string[] => {
+  if (!text) return [];
+  
+  // Regular expressions to match various suggestion patterns
+  const patterns = [
+    /(?:You should|Consider|We recommend|It is recommended to|It's recommended to|I recommend|Recommend to|You need to|You must|You could|You might want to|You may want to|You may need to|You might need to)[^.!?]+(\.|\!|\?)/gi,
+    /(?:It would be beneficial to|It's important to|It is important to|It is crucial to|It's crucial to)[^.!?]+(\.|\!|\?)/gi,
+    /(?:Make sure to|Ensure that|Be sure to)[^.!?]+(\.|\!|\?)/gi,
+  ];
+  
+  let suggestions: string[] = [];
+  
+  // Apply each pattern to extract suggestions
+  patterns.forEach(pattern => {
+    const matches = text.match(pattern);
+    if (matches) {
+      suggestions = [...suggestions, ...matches];
+    }
+  });
+  
+  // Remove duplicates and clean up
+  return [...new Set(suggestions)].map(s => s.trim());
 };
 
 export const getUserChatHistory = async (userId: string) => {

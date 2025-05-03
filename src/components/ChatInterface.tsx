@@ -3,10 +3,10 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Send, Loader, ChevronDown, ChevronUp, FileText, AlertTriangle } from 'lucide-react';
+import { Send, Loader, ChevronDown, ChevronUp, FileText, AlertTriangle, Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { askAgent, saveTaskFromSuggestion } from '@/utils/chatService';
+import { askAgent, saveTaskFromSuggestion, extractSuggestions } from '@/utils/chatService';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface DocumentContext {
@@ -96,14 +96,18 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         };
         setMessages((prev) => [...prev, errorMessage]);
       } else {
+        // Extract suggestions from the response
+        const responseText = response.response || response.rawResponse;
+        const extractedSuggestions = extractSuggestions(responseText);
+        
         // Process successful response
         const assistantMessage: ChatMessage = {
           role: 'assistant',
-          content: response.response || response.rawResponse,
+          content: responseText,
           id: response.id,
           compliantSections: response.compliantSections,
           gaps: response.gaps,
-          suggestions: response.suggestions,
+          suggestions: extractedSuggestions.length > 0 ? extractedSuggestions : response.suggestions,
           documentContext: response.documentContext,
         };
         
@@ -148,13 +152,14 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       const result = await saveTaskFromSuggestion(
         user.id,
         activeDocument?.id || null,
-        suggestion
+        suggestion,
+        'agent_suggestion'
       );
       
       if (result.success) {
         toast({
           title: "Task saved",
-          description: "The suggestion has been added to your tasks.",
+          description: "The suggestion has been added to your compliance tasks.",
         });
         
         if (onChatComplete) {
@@ -258,21 +263,21 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 
                 {message.role === 'assistant' && message.suggestions && message.suggestions.length > 0 && (
                   <div className="mt-3 ml-2 space-y-2">
-                    <p className="text-xs font-medium text-muted-foreground">Suggested Tasks:</p>
-                    <div className="flex flex-wrap gap-2">
-                      {message.suggestions.map((suggestion, i) => (
+                    <p className="text-xs font-medium text-muted-foreground">Suggested Actions:</p>
+                    {message.suggestions.map((suggestion, i) => (
+                      <div key={i} className="border border-complimate-purple/20 rounded-lg p-3 bg-complimate-purple/5">
+                        <p className="text-sm mb-2">{suggestion}</p>
                         <Button
-                          key={i}
                           size="sm"
                           variant="outline"
                           className="py-1 h-auto text-xs flex items-center gap-1"
                           onClick={() => handleSaveTask(suggestion)}
                         >
-                          <span className="block truncate max-w-[200px]">{suggestion}</span>
-                          <span className="text-complimate-purple">+</span>
+                          <Plus size={14} />
+                          <span>Create Task</span>
                         </Button>
-                      ))}
-                    </div>
+                      </div>
+                    ))}
                   </div>
                 )}
                 

@@ -1,146 +1,277 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CalendarIcon, CheckIcon, ClockIcon, AlertTriangleIcon, Filter, Plus } from 'lucide-react';
+import { 
+  CalendarIcon, 
+  CheckIcon, 
+  ClockIcon, 
+  AlertTriangleIcon, 
+  Filter, 
+  Plus,
+  FileTextIcon,
+  Calendar,
+  CalendarDaysIcon,
+  Edit,
+  Trash2 
+} from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
+import { supabase } from "@/integrations/supabase/client";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { format, parseISO, isValid, addDays } from 'date-fns';
+import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
+interface ComplianceTask {
+  id: string;
+  description: string;
+  status: string;
+  due_date: string | null;
+  created_at: string;
+  created_by: string | null;
+  related_doc_id: string | null;
+  source_type: string | null;
+  document?: {
+    name: string;
+    id: string;
+  };
+}
+
+const TaskStatusOptions = [
+  { value: 'open', label: 'Open' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'done', label: 'Completed' }
+];
 
 const Tasks: React.FC = () => {
-  const upcomingTasks = [
-    {
-      id: 1,
-      title: 'Quarterly Privacy Policy Review',
-      description: 'Review and update privacy policy to comply with latest regulations',
-      priority: 'high',
-      dueDate: '2025-05-05',
-      daysLeft: 5,
-      category: 'Privacy',
-      progress: 0
-    },
-    {
-      id: 2,
-      title: 'Annual Employee Handbook Update',
-      description: 'Ensure handbook reflects current labor laws and company policies',
-      priority: 'medium',
-      dueDate: '2025-05-15',
-      daysLeft: 15,
-      category: 'HR',
-      progress: 30
-    },
-    {
-      id: 3,
-      title: 'GDPR Cookie Consent Implementation',
-      description: 'Update website cookie consent to comply with GDPR requirements',
-      priority: 'high',
-      dueDate: '2025-05-10',
-      daysLeft: 10,
-      category: 'Technical',
-      progress: 0
-    }
-  ];
+  const [tasks, setTasks] = useState<ComplianceTask[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('all');
+  const [newTaskOpen, setNewTaskOpen] = useState(false);
+  const [newTask, setNewTask] = useState({
+    description: '',
+    due_date: '',
+    status: 'open'
+  });
+  const { user } = useAuth();
+  const { toast } = useToast();
+  
+  // Filtered task lists
+  const openTasks = tasks.filter(task => task.status === 'open');
+  const inProgressTasks = tasks.filter(task => task.status === 'in_progress');
+  const completedTasks = tasks.filter(task => task.status === 'done');
 
-  const inProgressTasks = [
-    {
-      id: 4,
-      title: 'Data Retention Policy Documentation',
-      description: 'Create comprehensive data retention policy',
-      priority: 'medium',
-      dueDate: '2025-05-20',
-      daysLeft: 20,
-      category: 'Data Management',
-      progress: 65
-    },
-    {
-      id: 5,
-      title: 'Third-Party Vendor Assessment',
-      description: 'Review security practices of current vendors',
-      priority: 'medium',
-      dueDate: '2025-06-01',
-      daysLeft: 32,
-      category: 'Security',
-      progress: 45
+  useEffect(() => {
+    if (user) {
+      fetchTasks();
     }
-  ];
+  }, [user]);
 
-  const completedTasks = [
-    {
-      id: 6,
-      title: 'Internal Data Protection Training',
-      description: 'Train team on data protection best practices',
-      priority: 'high',
-      completionDate: '2025-04-15',
-      category: 'Training'
-    },
-    {
-      id: 7,
-      title: 'Security Incident Response Plan',
-      description: 'Document procedures for responding to data breaches',
-      priority: 'high',
-      completionDate: '2025-04-10',
-      category: 'Security'
-    }
-  ];
+  const fetchTasks = async () => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('compliance_tasks')
+        .select(`
+          *,
+          document:documents(id, name)
+        `)
+        .order('created_at', { ascending: false });
 
-  const getPriorityBadge = (priority: string) => {
-    switch (priority) {
-      case 'high':
-        return <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-red-900/30 text-red-300">High</span>;
-      case 'medium':
-        return <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-yellow-900/30 text-yellow-300">Medium</span>;
-      default:
-        return <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-green-900/30 text-green-300">Low</span>;
+      if (error) {
+        throw error;
+      }
+
+      if (data) {
+        setTasks(data as ComplianceTask[]);
+      }
+    } catch (error) {
+      console.error('Error fetching tasks:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load compliance tasks.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const TaskCard = ({ task, showProgress = false, isCompleted = false }) => (
-    <div className="p-4 border border-border rounded-lg bg-card hover:border-complimate-purple/30 transition-all">
-      <div className="flex justify-between items-start">
-        <div className="flex gap-2">
-          <Checkbox id={`task-${task.id}`} checked={isCompleted} className="mt-1" />
-          <div>
-            <h3 className="font-medium text-foreground">{task.title}</h3>
-            <p className="text-sm text-muted-foreground mt-1">{task.description}</p>
-          </div>
-        </div>
-        {getPriorityBadge(task.priority)}
-      </div>
-      
-      <div className="mt-4 flex flex-wrap gap-3 items-center justify-between">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span className="inline-flex items-center px-2 py-1 rounded-full bg-secondary/50 text-secondary-foreground">
-            {task.category}
-          </span>
-          
-          {!isCompleted && (
-            <span className="inline-flex items-center">
-              <ClockIcon size={12} className="mr-1" />
-              {task.daysLeft} days left
-            </span>
-          )}
-          
-          {isCompleted && (
-            <span className="inline-flex items-center">
-              <CheckIcon size={12} className="mr-1 text-green-500" />
-              Completed {task.completionDate}
-            </span>
-          )}
-        </div>
-        
-        {showProgress && !isCompleted && (
-          <div className="w-full mt-2">
-            <div className="flex justify-between text-xs mb-1">
-              <span>Progress</span>
-              <span>{task.progress}%</span>
-            </div>
-            <Progress value={task.progress} className="h-1.5" />
-          </div>
-        )}
-      </div>
-    </div>
-  );
+  const updateTaskStatus = async (taskId: string, newStatus: string) => {
+    try {
+      const { error } = await supabase
+        .from('compliance_tasks')
+        .update({ status: newStatus })
+        .eq('id', taskId);
+
+      if (error) {
+        throw error;
+      }
+
+      // Update local state
+      setTasks(prevTasks => 
+        prevTasks.map(task => 
+          task.id === taskId ? { ...task, status: newStatus } : task
+        )
+      );
+
+      toast({
+        title: 'Task updated',
+        description: `Task status changed to ${newStatus}.`,
+      });
+    } catch (error) {
+      console.error('Error updating task status:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update task status.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const deleteTask = async (taskId: string) => {
+    try {
+      const { error } = await supabase
+        .from('compliance_tasks')
+        .delete()
+        .eq('id', taskId);
+
+      if (error) {
+        throw error;
+      }
+
+      // Update local state
+      setTasks(prevTasks => prevTasks.filter(task => task.id !== taskId));
+
+      toast({
+        title: 'Task deleted',
+        description: 'The task has been successfully deleted.',
+      });
+    } catch (error) {
+      console.error('Error deleting task:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete the task.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleNewTaskSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTask.description.trim()) {
+      toast({
+        title: 'Error',
+        description: 'Task description is required.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('compliance_tasks')
+        .insert({
+          description: newTask.description,
+          due_date: newTask.due_date || null,
+          status: newTask.status,
+          created_by: user?.id || 'manual',
+          source_type: 'manual'
+        })
+        .select();
+
+      if (error) {
+        throw error;
+      }
+
+      if (data) {
+        setTasks(prevTasks => [data[0] as ComplianceTask, ...prevTasks]);
+      }
+
+      // Reset form and close dialog
+      setNewTask({
+        description: '',
+        due_date: '',
+        status: 'open'
+      });
+      setNewTaskOpen(false);
+
+      toast({
+        title: 'Task created',
+        description: 'The task has been successfully created.',
+      });
+    } catch (error) {
+      console.error('Error creating task:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to create the task.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'open':
+        return <Badge className="bg-blue-900/40 text-blue-300">Open</Badge>;
+      case 'in_progress':
+        return <Badge className="bg-yellow-900/40 text-yellow-300">In Progress</Badge>;
+      case 'done':
+        return <Badge className="bg-green-900/40 text-green-300">Completed</Badge>;
+      default:
+        return <Badge variant="outline">{status}</Badge>;
+    }
+  };
+
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return 'No date set';
+    try {
+      const date = parseISO(dateString);
+      if (!isValid(date)) return 'Invalid date';
+      return format(date, 'MMM d, yyyy');
+    } catch {
+      return 'Invalid date';
+    }
+  };
+
+  const getSourceLabel = (task: ComplianceTask) => {
+    if (task.source_type === 'agent_suggestion') {
+      return 'AI Suggestion';
+    } else if (task.source_type === 'manual') {
+      return 'Manual Entry';
+    } else if (task.source_type) {
+      return task.source_type;
+    }
+    return 'Unknown';
+  };
 
   return (
     <Layout>
@@ -157,10 +288,65 @@ const Tasks: React.FC = () => {
               <Filter size={16} />
               Filter
             </Button>
-            <Button className="flex items-center gap-2">
-              <Plus size={16} />
-              New Task
-            </Button>
+            <Dialog open={newTaskOpen} onOpenChange={setNewTaskOpen}>
+              <DialogTrigger asChild>
+                <Button className="flex items-center gap-2">
+                  <Plus size={16} />
+                  New Task
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[525px]">
+                <DialogHeader>
+                  <DialogTitle>Create New Compliance Task</DialogTitle>
+                  <DialogDescription>
+                    Add a new task to track compliance requirements or actions.
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleNewTaskSubmit} className="space-y-4 mt-4">
+                  <div className="grid gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="description">Description</Label>
+                      <Input
+                        id="description"
+                        placeholder="Describe the compliance task..."
+                        value={newTask.description}
+                        onChange={(e) => setNewTask({...newTask, description: e.target.value})}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="due_date">Due Date (Optional)</Label>
+                      <Input
+                        id="due_date"
+                        type="date"
+                        value={newTask.due_date}
+                        onChange={(e) => setNewTask({...newTask, due_date: e.target.value})}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="status">Status</Label>
+                      <Select 
+                        value={newTask.status} 
+                        onValueChange={(value) => setNewTask({...newTask, status: value})}
+                      >
+                        <SelectTrigger id="status">
+                          <SelectValue placeholder="Select status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {TaskStatusOptions.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button type="submit">Create Task</Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
         
@@ -170,16 +356,18 @@ const Tasks: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-xl font-medium text-complimate-purple">Compliance Overview</h2>
-                  <p className="text-muted-foreground mt-1">3 tasks requiring action this month</p>
+                  <p className="text-muted-foreground mt-1">
+                    {isLoading ? "Loading tasks..." : `${openTasks.length} tasks requiring action`}
+                  </p>
                 </div>
                 
                 <div className="flex gap-6">
                   <div className="text-center">
-                    <div className="text-2xl font-semibold text-complimate-purple">{upcomingTasks.length}</div>
-                    <div className="text-xs text-muted-foreground">Upcoming</div>
+                    <div className="text-2xl font-semibold text-blue-500">{openTasks.length}</div>
+                    <div className="text-xs text-muted-foreground">Open</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-semibold text-complimate-neon-blue">{inProgressTasks.length}</div>
+                    <div className="text-2xl font-semibold text-yellow-500">{inProgressTasks.length}</div>
                     <div className="text-xs text-muted-foreground">In Progress</div>
                   </div>
                   <div className="text-center">
@@ -192,73 +380,313 @@ const Tasks: React.FC = () => {
           </Card>
         </div>
         
-        <Tabs defaultValue="upcoming">
+        <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="mb-6">
-            <TabsTrigger value="upcoming" className="relative">
-              Upcoming
-              <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-complimate-purple text-xs flex items-center justify-center">
-                {upcomingTasks.length}
-              </span>
-            </TabsTrigger>
-            <TabsTrigger value="in-progress">In Progress</TabsTrigger>
-            <TabsTrigger value="completed">Completed</TabsTrigger>
             <TabsTrigger value="all">All Tasks</TabsTrigger>
+            <TabsTrigger value="open" className="relative">
+              Open
+              {openTasks.length > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-blue-500 text-xs flex items-center justify-center text-white">
+                  {openTasks.length}
+                </span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="in_progress">In Progress</TabsTrigger>
+            <TabsTrigger value="done">Completed</TabsTrigger>
           </TabsList>
           
-          <TabsContent value="upcoming" className="space-y-4">
-            {upcomingTasks.map(task => (
-              <TaskCard key={task.id} task={task} />
-            ))}
+          <TabsContent value="all">
+            <Card>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Description</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Due Date</TableHead>
+                    <TableHead>Source</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {isLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-4">Loading tasks...</TableCell>
+                    </TableRow>
+                  ) : tasks.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-4">No tasks found. Create a new task to get started.</TableCell>
+                    </TableRow>
+                  ) : (
+                    tasks.map((task) => (
+                      <TableRow key={task.id}>
+                        <TableCell className="font-medium max-w-[300px]">
+                          <div className="truncate" title={task.description}>
+                            {task.description}
+                          </div>
+                          {task.document && (
+                            <div className="mt-1">
+                              <span className="text-xs flex items-center text-muted-foreground">
+                                <FileTextIcon size={12} className="mr-1" />
+                                {task.document.name}
+                              </span>
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-auto py-1">
+                                {getStatusBadge(task.status)}
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent>
+                              {TaskStatusOptions.map((option) => (
+                                <DropdownMenuItem 
+                                  key={option.value} 
+                                  onClick={() => updateTaskStatus(task.id, option.value)}
+                                  disabled={task.status === option.value}
+                                  className={task.status === option.value ? "bg-muted" : ""}
+                                >
+                                  {option.label}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                        <TableCell>
+                          {task.due_date ? formatDate(task.due_date) : 'No due date'}
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-xs bg-secondary/50 px-2 py-0.5 rounded-full">
+                            {getSourceLabel(task)}
+                          </span>
+                        </TableCell>
+                        <TableCell>{formatDate(task.created_at)}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <Edit size={16} />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8 text-destructive"
+                              onClick={() => deleteTask(task.id)}
+                            >
+                              <Trash2 size={16} />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </Card>
           </TabsContent>
           
-          <TabsContent value="in-progress" className="space-y-4">
-            {inProgressTasks.map(task => (
-              <TaskCard key={task.id} task={task} showProgress={true} />
-            ))}
+          <TabsContent value="open">
+            <Card>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Description</TableHead>
+                    <TableHead>Due Date</TableHead>
+                    <TableHead>Source</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {isLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-4">Loading tasks...</TableCell>
+                    </TableRow>
+                  ) : openTasks.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-4">No open tasks found.</TableCell>
+                    </TableRow>
+                  ) : (
+                    openTasks.map((task) => (
+                      <TableRow key={task.id}>
+                        <TableCell className="font-medium max-w-[300px]">
+                          <div className="truncate" title={task.description}>
+                            {task.description}
+                          </div>
+                          {task.document && (
+                            <div className="mt-1">
+                              <span className="text-xs flex items-center text-muted-foreground">
+                                <FileTextIcon size={12} className="mr-1" />
+                                {task.document.name}
+                              </span>
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {task.due_date ? formatDate(task.due_date) : 'No due date'}
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-xs bg-secondary/50 px-2 py-0.5 rounded-full">
+                            {getSourceLabel(task)}
+                          </span>
+                        </TableCell>
+                        <TableCell>{formatDate(task.created_at)}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => updateTaskStatus(task.id, 'in_progress')}
+                            >
+                              Start Task
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </Card>
           </TabsContent>
           
-          <TabsContent value="completed" className="space-y-4">
-            {completedTasks.map(task => (
-              <TaskCard key={task.id} task={task} isCompleted={true} />
-            ))}
+          <TabsContent value="in_progress">
+            {/* Similar table structure for in-progress tasks */}
+            <Card>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Description</TableHead>
+                    <TableHead>Due Date</TableHead>
+                    <TableHead>Source</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {isLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-4">Loading tasks...</TableCell>
+                    </TableRow>
+                  ) : inProgressTasks.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-4">No in-progress tasks found.</TableCell>
+                    </TableRow>
+                  ) : (
+                    inProgressTasks.map((task) => (
+                      <TableRow key={task.id}>
+                        <TableCell className="font-medium max-w-[300px]">
+                          <div className="truncate" title={task.description}>
+                            {task.description}
+                          </div>
+                          {task.document && (
+                            <div className="mt-1">
+                              <span className="text-xs flex items-center text-muted-foreground">
+                                <FileTextIcon size={12} className="mr-1" />
+                                {task.document.name}
+                              </span>
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {task.due_date ? formatDate(task.due_date) : 'No due date'}
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-xs bg-secondary/50 px-2 py-0.5 rounded-full">
+                            {getSourceLabel(task)}
+                          </span>
+                        </TableCell>
+                        <TableCell>{formatDate(task.created_at)}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="bg-green-900/20 text-green-500 border-green-500/30 hover:bg-green-900/30"
+                              onClick={() => updateTaskStatus(task.id, 'done')}
+                            >
+                              <CheckIcon size={16} className="mr-1" />
+                              Complete
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </Card>
           </TabsContent>
           
-          <TabsContent value="all" className="space-y-6">
-            <div>
-              <h3 className="text-md font-medium mb-3 flex items-center">
-                <AlertTriangleIcon size={16} className="text-red-400 mr-2" />
-                Upcoming
-              </h3>
-              <div className="space-y-4">
-                {upcomingTasks.map(task => (
-                  <TaskCard key={task.id} task={task} />
-                ))}
-              </div>
-            </div>
-            
-            <div>
-              <h3 className="text-md font-medium mb-3 flex items-center">
-                <ClockIcon size={16} className="text-blue-400 mr-2" />
-                In Progress
-              </h3>
-              <div className="space-y-4">
-                {inProgressTasks.map(task => (
-                  <TaskCard key={task.id} task={task} showProgress={true} />
-                ))}
-              </div>
-            </div>
-            
-            <div>
-              <h3 className="text-md font-medium mb-3 flex items-center">
-                <CheckIcon size={16} className="text-green-500 mr-2" />
-                Completed
-              </h3>
-              <div className="space-y-4">
-                {completedTasks.map(task => (
-                  <TaskCard key={task.id} task={task} isCompleted={true} />
-                ))}
-              </div>
-            </div>
+          <TabsContent value="done">
+            {/* Similar table structure for completed tasks */}
+            <Card>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Description</TableHead>
+                    <TableHead>Completed</TableHead>
+                    <TableHead>Source</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {isLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center py-4">Loading tasks...</TableCell>
+                    </TableRow>
+                  ) : completedTasks.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center py-4">No completed tasks found.</TableCell>
+                    </TableRow>
+                  ) : (
+                    completedTasks.map((task) => (
+                      <TableRow key={task.id}>
+                        <TableCell className="font-medium max-w-[300px]">
+                          <div className="truncate" title={task.description}>
+                            {task.description}
+                          </div>
+                          {task.document && (
+                            <div className="mt-1">
+                              <span className="text-xs flex items-center text-muted-foreground">
+                                <FileTextIcon size={12} className="mr-1" />
+                                {task.document.name}
+                              </span>
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>{formatDate(task.created_at)}</TableCell>
+                        <TableCell>
+                          <span className="text-xs bg-secondary/50 px-2 py-0.5 rounded-full">
+                            {getSourceLabel(task)}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => updateTaskStatus(task.id, 'open')}
+                            >
+                              Reopen
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8 text-destructive"
+                              onClick={() => deleteTask(task.id)}
+                            >
+                              <Trash2 size={16} />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>

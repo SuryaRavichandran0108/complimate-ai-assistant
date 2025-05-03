@@ -44,6 +44,50 @@ export type Database = {
           },
         ]
       }
+      compliance_tasks: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          description: string
+          due_date: string | null
+          id: string
+          org_id: string | null
+          related_doc_id: string | null
+          source_type: string | null
+          status: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          description: string
+          due_date?: string | null
+          id?: string
+          org_id?: string | null
+          related_doc_id?: string | null
+          source_type?: string | null
+          status?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string
+          due_date?: string | null
+          id?: string
+          org_id?: string | null
+          related_doc_id?: string | null
+          source_type?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_related_doc"
+            columns: ["related_doc_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       document_chunks: {
         Row: {
           chunk_index: number
