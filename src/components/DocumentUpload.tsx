@@ -23,7 +23,7 @@ type UploadState = {
 const DocumentUpload: React.FC<DocumentUploadProps> = ({ onUploadComplete }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [file, setFile] = useState<File | null>(null);
-  const [uploadState, setUploadState] = useState<UploadState>{
+  const [uploadState, setUploadState] = useState<UploadState>({
     state: 'idle',
     progress: 0,
     error: null,
