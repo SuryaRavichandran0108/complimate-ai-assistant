@@ -19,6 +19,7 @@ interface DocumentChunk {
   document_id: string;
   chunk_text: string;
   chunk_index: number;
+  chunk_metadata?: any;
 }
 
 async function generateEmbedding(text: string, retries = 0): Promise<number[] | null> {

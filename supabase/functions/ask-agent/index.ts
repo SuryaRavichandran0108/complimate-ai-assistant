@@ -1,6 +1,6 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.43.0';
-import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
+import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 
 // CORS headers
 const corsHeaders = {
@@ -23,6 +23,7 @@ interface DocumentChunk {
 }
 
 const MIN_CHUNK_LENGTH = 30; // Minimum words in a chunk
+const SIMILARITY_THRESHOLD = 0.75; // Minimum similarity score for relevant chunks
 
 async function generateEmbedding(text: string, retries = 0): Promise<number[] | null> {
   try {
@@ -121,7 +122,7 @@ async function searchSimilarChunks(
   queryEmbedding: number[], 
   userId: string,
   documentId?: string,
-  threshold = 0.7,
+  threshold = SIMILARITY_THRESHOLD,
   limit = 5
 ): Promise<DocumentChunk[]> {
   try {
@@ -212,29 +213,37 @@ const generateComplianceResponse = async (
   try {
     // Prepare context from document chunks
     let documentContext = '';
-    if (documentChunks.length > 0) {
-      documentContext = `
-You are analyzing the following document excerpts:
-
-${documentChunks.map((chunk, i) => `[EXCERPT ${i+1} from ${chunk.document_name}]
-${chunk.chunk_text}
-`).join('\n\n')}
-
-Based on these excerpts, `;
+    let useDocumentPrompt = documentChunks.length > 0;
+    
+    if (useDocumentPrompt) {
+      documentContext = documentChunks.map((chunk, i) => 
+        `[EXCERPT ${i+1} from ${chunk.document_name}]\n${chunk.chunk_text}\n`
+      ).join('\n\n');
     }
     
-    const prompt = `
-${documentContext}You are a compliance advisor for small U.S. businesses. ${documentChunks.length > 0 ? 'Use the provided excerpts to ' : ''}Answer this question:
+    // Choose the appropriate prompt based on whether we have document context
+    const prompt = useDocumentPrompt ? 
+      `You are a compliance auditor AI reviewing uploaded internal documents.
+
+Answer the user's question strictly using the document excerpts provided below. Do not rely on prior knowledge unless instructed.
+
+If the document excerpts do not mention the topic, say clearly:
+"This document does not appear to contain information related to [insert topic or keyword here]."
+
+If excerpts are relevant, summarize them with exact section references or quoted lines where appropriate.
+
+📄 Document Context:
+${documentContext}
+
+🧠 User Question:
 "${query}"
 
-Respond with 3 structured sections:
-✅ Compliant Aspects:
-⚠️ Noncompliant or Risky Areas:
-💡 Recommended Improvements:
+💬 Your Answer:` :
+      `You are an AI compliance assistant. The user asked a question, but no relevant content was found in their uploaded documents. Please answer using general compliance knowledge and label your response as general guidance.
 
-Use plain language. Reference relevant U.S. laws or common best practices if possible.
-${documentChunks.length > 0 ? 'Make specific references to the document content when applicable.' : ''}
-`
+User question: "${query}"
+
+Please start your response with: "Based on general compliance knowledge (not your specific document):"`;
 
     const openaiKey = Deno.env.get('OPENAI_API_KEY')
     if (!openaiKey) {

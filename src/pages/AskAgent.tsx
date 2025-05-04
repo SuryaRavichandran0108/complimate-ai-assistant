@@ -179,28 +179,28 @@ const AskAgent: React.FC = () => {
                   className="w-full justify-start text-left p-2 h-auto"
                   onClick={() => {}}
                 >
-                  How do I comply with GDPR?
+                  Does this policy include GDPR subject access rights?
                 </Button>
                 <Button
                   variant="ghost"
                   className="w-full justify-start text-left p-2 h-auto"
                   onClick={() => {}}
                 >
-                  What are SOC 2 requirements?
+                  What are the privacy requirements in our handbook?
                 </Button>
                 <Button
                   variant="ghost"
                   className="w-full justify-start text-left p-2 h-auto"
                   onClick={() => {}}
                 >
-                  Explain HIPAA compliance
+                  Explain data retention policies
                 </Button>
                 <Button
                   variant="ghost"
                   className="w-full justify-start text-left p-2 h-auto"
                   onClick={() => {}}
                 >
-                  California labor law changes 2025
+                  What PII handling procedures are mentioned?
                 </Button>
               </CardContent>
             </Card>

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Upload, X, FileText, AlertTriangle, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';

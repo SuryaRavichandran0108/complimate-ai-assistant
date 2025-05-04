@@ -8,6 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { askAgent, saveTaskFromSuggestion, extractSuggestions } from '@/utils/chatService';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 
 interface DocumentContext {
   chunk_text: string;
@@ -23,6 +24,7 @@ interface ChatMessage {
   gaps?: string[];
   suggestions?: string[];
   documentContext?: DocumentContext[];
+  isDocumentBased?: boolean;
 }
 
 interface ChatInterfaceProps {
@@ -100,6 +102,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         const responseText = response.response || response.rawResponse;
         const extractedSuggestions = extractSuggestions(responseText);
         
+        // Check if response is document-based or fallback
+        const isDocumentBased = response.documentContext && response.documentContext.length > 0;
+        
         // Process successful response
         const assistantMessage: ChatMessage = {
           role: 'assistant',
@@ -109,9 +114,19 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
           gaps: response.gaps,
           suggestions: extractedSuggestions.length > 0 ? extractedSuggestions : response.suggestions,
           documentContext: response.documentContext,
+          isDocumentBased
         };
         
         setMessages((prev) => [...prev, assistantMessage]);
+        
+        // Show toast notification for document-based vs general response
+        if (documentContext === 'document' && !isDocumentBased) {
+          toast({
+            title: "⚠️ General Answer Provided",
+            description: "No relevant content was found in the document. The answer is based on general knowledge.",
+            variant: "warning",
+          });
+        }
       }
       
       if (onChatComplete) {
@@ -244,21 +259,31 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                   message.role === 'user' ? 'items-end' : 'items-start'
                 }`}
               >
-                <div
-                  className={`rounded-lg px-4 py-2 max-w-[85%] ${
-                    message.role === 'user'
-                      ? 'bg-complimate-purple text-white'
-                      : message.role === 'system'
-                      ? 'bg-yellow-500/10 border border-yellow-500/30 text-foreground'
-                      : 'bg-secondary text-secondary-foreground'
-                  }`}
-                >
-                  {message.content.split('\n').map((line, i) => (
-                    <React.Fragment key={i}>
-                      {line}
-                      {i < message.content.split('\n').length - 1 && <br />}
-                    </React.Fragment>
-                  ))}
+                <div className="flex flex-col gap-1">
+                  <div
+                    className={`rounded-lg px-4 py-2 max-w-[85%] ${
+                      message.role === 'user'
+                        ? 'bg-complimate-purple text-white'
+                        : message.role === 'system'
+                        ? 'bg-yellow-500/10 border border-yellow-500/30 text-foreground'
+                        : 'bg-secondary text-secondary-foreground'
+                    }`}
+                  >
+                    {message.content.split('\n').map((line, i) => (
+                      <React.Fragment key={i}>
+                        {line}
+                        {i < message.content.split('\n').length - 1 && <br />}
+                      </React.Fragment>
+                    ))}
+                  </div>
+                  
+                  {message.role === 'assistant' && message.isDocumentBased !== undefined && (
+                    <div className="ml-2 mt-1">
+                      <Badge className={message.isDocumentBased ? "bg-green-600" : "bg-yellow-500"}>
+                        {message.isDocumentBased ? "🔍 Answer based on uploaded document" : "⚠️ Answer not based on uploaded document"}
+                      </Badge>
+                    </div>
+                  )}
                 </div>
                 
                 {message.role === 'assistant' && message.suggestions && message.suggestions.length > 0 && (
