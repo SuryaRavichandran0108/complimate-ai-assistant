@@ -13,22 +13,23 @@ interface DocumentUploadProps {
   onUploadComplete?: (documentId: string) => void;
 }
 
-type UploadState = 'idle' | 'uploading' | 'processing' | 'success' | 'error';
+type UploadState = {
+  state: 'idle' | 'uploading' | 'processing' | 'success' | 'error';
+  progress: number;
+  error: string | null;
+  documentId: string | null;
+};
 
 const DocumentUpload: React.FC<DocumentUploadProps> = ({ onUploadComplete }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [file, setFile] = useState<File | null>(null);
-  const [uploadState, setUploadState] = useState<{
-    state: UploadState;
-    progress: number;
-    error: string | null;
-    documentId: string | null;
-  }>({
+  const [uploadState, setUploadState] = useState<UploadState>{
     state: 'idle',
     progress: 0,
     error: null,
     documentId: null
   });
+  
   const { user } = useAuth();
   const { toast } = useToast();
 
